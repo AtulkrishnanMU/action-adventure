@@ -1,0 +1,32 @@
+[gd_scene load_steps=5 format=3 uid="uid://bvqx8y7n2kqrp"]
+
+[ext_resource type="Texture2D" uid="uid://cdjnlfo6bcesq" path="res://sprites/objects/grass_blade.png" id="1_abcde"]
+[ext_resource type="Script" uid="uid://b75akj8d0xco5" path="res://scenes/objects/grass/grass.gd" id="2_abcde"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_d8nlo"]
+size = Vector2(22, 37)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_collision"]
+size = Vector2(22, 37)
+
+[node name="Grass" type="Node2D"]
+script = ExtResource("2_abcde")
+
+[node name="GrassBlade1" type="Sprite2D" parent="."]
+position = Vector2(-5, 33)
+texture = ExtResource("1_abcde")
+offset = Vector2(0, -17)
+
+[node name="GrassBlade2" type="Sprite2D" parent="."]
+position = Vector2(5, 34)
+scale = Vector2(0.8896571, 0.8896571)
+texture = ExtResource("1_abcde")
+offset = Vector2(0, -18)
+
+[node name="Area2D" type="Area2D" parent="."]
+position = Vector2(0, 16.5)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Area2D"]
+shape = SubResource("RectangleShape2D_collision")
+
+[connection signal="area_entered" from="Area2D" to="." method="_on_area_entered"]

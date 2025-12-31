@@ -90,12 +90,12 @@ func _physics_process(delta: float) -> void:
 	
 	# Roll logic - works whether horizontal or down is pressed first
 	if Input.is_action_pressed("ui_down") and is_on_floor() and not is_rolling and not is_attacking:
-		var direction := Input.get_axis("ui_left", "ui_right")
-		if direction != 0:  # Roll when down is held and horizontal is pressed
+		var roll_input_direction := Input.get_axis("ui_left", "ui_right")
+		if roll_input_direction != 0:  # Roll when down is held and horizontal is pressed
 			is_rolling = true
-			roll_direction = direction
+			roll_direction = int(roll_input_direction)
 			animated_sprite_2d.animation = "roll"
-			animated_sprite_2d.flip_h = direction < 0
+			animated_sprite_2d.flip_h = roll_input_direction < 0
 	
 	# Check if roll animation has finished
 	if is_rolling and animated_sprite_2d.animation == "roll":

@@ -34,7 +34,6 @@ static func update_jump_dust_timer(current_timer: float, delta: float) -> float:
 		return 0.0
 	current_timer -= delta
 	if current_timer <= 0.0:
-		print("Jump dust generation finished - particles will fade naturally")
 		return 0.0
 	return current_timer
 
@@ -52,7 +51,6 @@ static func update_continuous_dust(
 		var target_amount := _scaled_amount(speed, base_speed, default_amount)
 		if not dust_particles.emitting:
 			dust_particles.amount = target_amount
-			print("Starting dust emission - moving on floor or jumping")
 		else:
 			# Avoid decreasing amount while emitting; it can cull existing particles abruptly.
 			if target_amount > dust_particles.amount:
@@ -60,5 +58,4 @@ static func update_continuous_dust(
 		dust_particles.emitting = true
 	else:
 		if dust_particles.emitting:
-			print("Stopping dust emission - not moving or not on floor")
-		dust_particles.emitting = false
+			dust_particles.emitting = false
