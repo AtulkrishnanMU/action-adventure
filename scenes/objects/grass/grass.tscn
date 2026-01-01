@@ -25,8 +25,20 @@ offset = Vector2(0, -18)
 
 [node name="Area2D" type="Area2D" parent="."]
 position = Vector2(0, 16.5)
+collision_layer = 0
+collision_mask = 12
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Area2D"]
 shape = SubResource("RectangleShape2D_collision")
 
+[node name="Hurtbox" type="Area2D" parent="."]
+position = Vector2(0, 16.5)
+monitoring = true
+collision_layer = 4
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
+shape = SubResource("RectangleShape2D_collision")
+
 [connection signal="area_entered" from="Area2D" to="." method="_on_area_entered"]
+[connection signal="area_entered" from="Hurtbox" to="." method="_on_hurtbox_area_entered"]

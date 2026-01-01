@@ -1,0 +1,41 @@
+[gd_scene load_steps=6 format=3 uid="uid://bvxk8y7n2kqrp"]
+
+[ext_resource type="Texture2D" uid="uid://swupwjoerkhw" path="res://sprites/objects/crate/crate.png" id="1_abcde"]
+[ext_resource type="Script" uid="uid://bke8bsgtj62qo" path="res://scenes/objects/crate/crate.gd" id="2_abcde"]
+[ext_resource type="AudioStream" uid="uid://djmsdl5xveth5" path="res://sounds/crate-hit.mp3" id="2_ekj6g"]
+[ext_resource type="AudioStream" uid="uid://bx0kjigofxbtu" path="res://sounds/crate-break.mp3" id="3_6oefm"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hurtbox"]
+size = Vector2(86, 87.90664)
+
+[node name="Crate" type="Node2D"]
+script = ExtResource("2_abcde")
+
+[node name="CrateHit" type="AudioStreamPlayer2D" parent="."]
+scale = Vector2(0.6624053, 0.6624053)
+stream = ExtResource("2_ekj6g")
+
+[node name="CrateBreak" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("3_6oefm")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+scale = Vector2(0.6508607, 0.6508607)
+texture = ExtResource("1_abcde")
+
+[node name="Hurtbox" type="Area2D" parent="."]
+scale = Vector2(0.6624053, 0.6624053)
+collision_layer = 4
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
+position = Vector2(-1, 4)
+shape = SubResource("RectangleShape2D_hurtbox")
+
+[node name="StaticBody2D" type="StaticBody2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="StaticBody2D"]
+position = Vector2(-0.9999999, 4.747407)
+scale = Vector2(0.5665824, 0.62003493)
+shape = SubResource("RectangleShape2D_hurtbox")
+
+[connection signal="area_entered" from="Hurtbox" to="." method="_on_hurtbox_area_entered"]

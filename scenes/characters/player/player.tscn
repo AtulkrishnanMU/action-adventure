@@ -1,4 +1,4 @@
-[gd_scene load_steps=67 format=3 uid="uid://b5xhiwa1iy42"]
+[gd_scene load_steps=69 format=3 uid="uid://b5xhiwa1iy42"]
 
 [ext_resource type="Script" uid="uid://fbqmytkglb1t" path="res://scenes/characters/player/player.gd" id="1_6avc5"]
 [ext_resource type="AudioStream" uid="uid://dchro2t67htf4" path="res://sounds/landing.mp3" id="2_42irl"]
@@ -12,7 +12,8 @@
 [ext_resource type="Texture2D" uid="uid://bpbtinlj1e5g1" path="res://sprites/characters/player/player_jump.png" id="10_blysn"]
 [ext_resource type="Texture2D" uid="uid://dnjvt8kdhj65g" path="res://sprites/characters/player/player_roll.png" id="11_bsn6e"]
 [ext_resource type="Texture2D" uid="uid://lvb10raqid4l" path="res://sprites/characters/player/player_run.png" id="12_bsn6e"]
-[ext_resource type="Texture2D" uid="uid://dui8y1mg4g5gj" path="res://sprites/Particle FX/Dust_01.png" id="13_dust"]
+[ext_resource type="Texture2D" uid="uid://l1mh47fj36fa" path="res://sprites/effects/dust.png" id="13_dust"]
+[ext_resource type="AudioStream" uid="uid://lkkxnhrvmrgl" path="res://sounds/hit.mp3" id="14_hv5x3"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_djydg"]
 atlas = ExtResource("6_xuses")
@@ -226,7 +227,7 @@ animations = [{
 }],
 "loop": false,
 "name": &"attack1",
-"speed": 9.0
+"speed": 15.0
 }, {
 "frames": [{
 "duration": 1.0,
@@ -246,7 +247,7 @@ animations = [{
 }],
 "loop": false,
 "name": &"attack2",
-"speed": 9.0
+"speed": 15.0
 }, {
 "frames": [{
 "duration": 1.0,
@@ -434,9 +435,14 @@ scale_min = 0.6
 scale_max = 1.6
 color = Color(1, 1, 1, 0.2)
 
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hitbox"]
+size = Vector2(116.48622, 60)
+
 [node name="Player" type="CharacterBody2D"]
 scale = Vector2(0.6756309, 0.6756309)
+collision_layer = 2
 script = ExtResource("1_6avc5")
+attack_knockback = 200.0
 
 [node name="landing" type="AudioStreamPlayer2D" parent="."]
 position = Vector2(-1, 1)
@@ -457,9 +463,8 @@ stream = ExtResource("5_3xnwo")
 position = Vector2(-4.0000157, 4.999999)
 scale = Vector2(0.4661355, 0.4661355)
 sprite_frames = SubResource("SpriteFrames_sulyr")
-animation = &"run"
+animation = &"idle"
 autoplay = "idle"
-frame_progress = 0.24263255
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(-12, 6)
@@ -494,7 +499,30 @@ explosiveness = 1.0
 process_material = SubResource("ParticleProcessMaterial_landing_dust_left")
 
 [node name="PlayerArea" type="Area2D" parent="."]
+collision_layer = 4
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="PlayerArea"]
-position = Vector2(-11.840785, 5.9203925)
+position = Vector2(-11.840786, 5.920393)
+scale = Vector2(1.0000001, 1.0000001)
 shape = SubResource("RectangleShape2D_6avc5")
+
+[node name="Hitbox" type="Area2D" parent="." groups=["player_hitbox"]]
+position = Vector2(60, 6)
+collision_layer = 2
+collision_mask = 4
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hitbox"]
+position = Vector2(-41.27803, 25.08206)
+scale = Vector2(1.0000001, 1.0000001)
+shape = SubResource("RectangleShape2D_hitbox")
+
+[node name="HitboxTimer" type="Timer" parent="."]
+one_shot = true
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(-8.880592, -173.17146)
+scale = Vector2(0.46613553, 0.46613553)
+position_smoothing_enabled = true
+
+[node name="Hit" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("14_hv5x3")
