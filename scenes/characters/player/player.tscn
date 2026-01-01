@@ -519,6 +519,14 @@ shape = SubResource("RectangleShape2D_hitbox")
 [node name="HitboxTimer" type="Timer" parent="."]
 one_shot = true
 
+[node name="Hurtbox" type="Area2D" parent="."]
+collision_layer = 4
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
+position = Vector2(-11.840788, 5.9203916)
+shape = SubResource("RectangleShape2D_6avc5")
+
 [node name="Camera2D" type="Camera2D" parent="."]
 position = Vector2(-8.880592, -173.17146)
 scale = Vector2(0.46613553, 0.46613553)

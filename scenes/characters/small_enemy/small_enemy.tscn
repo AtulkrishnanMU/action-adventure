@@ -1,10 +1,12 @@
-[gd_scene load_steps=32 format=3 uid="uid://s5s8rihc17h3"]
+[gd_scene load_steps=34 format=3 uid="uid://s5s8rihc17h3"]
 
 [ext_resource type="Script" uid="uid://bchl18iu4f08x" path="res://scenes/characters/small_enemy/small_enemy.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://bdbu5s5jyo4kc" path="res://sprites/characters/Mushroom/Attack.png" id="2_ilypm"]
 [ext_resource type="Texture2D" uid="uid://1un4ydbvjnmj" path="res://sprites/characters/Mushroom/Death.png" id="3_03agk"]
 [ext_resource type="Texture2D" uid="uid://xwhba8223g5w" path="res://sprites/characters/Mushroom/Idle.png" id="4_ky0x4"]
 [ext_resource type="Texture2D" uid="uid://dpfm1kldy3ytw" path="res://sprites/characters/Mushroom/Run.png" id="5_y8fny"]
+[ext_resource type="AudioStream" uid="uid://ix0dv4itc48p" path="res://sounds/small_enemy/small_enemy_death/enemy-death.mp3" id="6_ky0x4"]
+[ext_resource type="AudioStream" uid="uid://c2ff3ruq7yhl4" path="res://sounds/small_enemy/small_enemy_hurt/hurt.mp3" id="7_y8fny"]
 
 [sub_resource type="RectangleShape2D" id="1"]
 size = Vector2(31.543797, 32)
@@ -243,4 +245,8 @@ position = Vector2(59.5791, 0)
 scale = Vector2(2, 2)
 shape = SubResource("1")
 
-[node name="AudioStreamPlayer2D" type="AudioStreamPlayer2D" parent="."]
+[node name="Death" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("6_ky0x4")
+
+[node name="Hurt" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("7_y8fny")

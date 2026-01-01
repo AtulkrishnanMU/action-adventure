@@ -12,6 +12,7 @@ extends CharacterBody2D
 @onready var hitbox_collision_shape: CollisionShape2D = $Hitbox/CollisionShape2D
 @onready var hitbox_timer: Timer = $HitboxTimer
 @onready var player_area: Area2D = $PlayerArea
+@onready var hurtbox: Area2D = $Hurtbox
 var hitbox_offset_x: float
 var original_hitbox_position: Vector2
 
@@ -56,11 +57,25 @@ func is_player() -> bool:
 
 func take_damage(amount: int, attacker_position: Vector2 = Vector2.ZERO) -> void:
 	current_hp = max(0, current_hp - amount)
-	# Apply knockback
-	if attacker_position != Vector2.ZERO:
-		var knockback_dir = (global_position - attacker_position).normalized()
-		velocity = knockback_dir * 500.0
-		velocity.y = -200.0  # Add upward force
+	
+	# Handle damage effects using CharacterUtils
+	CharacterUtils.handle_damage_effects(
+		self,
+		current_hp,
+		max_hp,
+		attacker_position,
+		15.0,  # Regular shake intensity (less than enemy)
+		0.2,   # Regular shake duration
+		25.0,  # Fatal shake intensity
+		0.4    # Fatal shake duration
+	)
+	
+	# Apply knockback using CharacterUtils
+	CharacterUtils.apply_knockback(self, attacker_position, 500.0, 0.4)
+	
+	# Update UI health bar
+	_update_ui_health()
+	
 	# Flash red effect
 	var tween = create_tween()
 	tween.tween_property(animated_sprite_2d, "modulate", Color(1, 0.5, 0.5, 1.0), 0.1)
@@ -79,6 +94,13 @@ func _ready():
 	hitbox_collision_shape.disabled = true
 	hitbox_timer.one_shot = true
 	hitbox_timer.timeout.connect(_on_hitbox_timer_timeout)
+	
+	# Connect hurtbox signal
+	if hurtbox:
+		hurtbox.area_entered.connect(_on_hurtbox_area_entered)
+	
+	# Initialize UI health
+	_update_ui_health()
 	
 	# Player area initialization
 
@@ -217,3 +239,19 @@ func play_hit_sound() -> void:
 	"""Play hit sound with random pitch variation"""
 	if hit:
 		AudioUtils.play_with_random_pitch(hit, 0.9, 1.1)
+
+func _update_ui_health() -> void:
+	"""Update the UI health bar with current health values"""
+	var ui = get_tree().get_first_node_in_group("ui")
+	if ui and ui.has_method("update_health"):
+		ui.update_health(current_hp, max_hp)
+
+func _on_hurtbox_area_entered(area: Area2D) -> void:
+	"""Called when enemy hitbox enters player hurtbox"""
+	# Check if the entering area is an enemy hitbox (but not our own hitbox)
+	if area.collision_layer == 2 and area != hitbox:  # Enemy hitboxes are on layer 2, exclude our own hitbox
+		var enemy = area.get_parent()
+		var enemy_position = enemy.global_position if enemy else Vector2.ZERO
+		
+		# Take damage (using 10 damage as default enemy damage)
+		take_damage(10, enemy_position)

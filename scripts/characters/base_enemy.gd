@@ -2,6 +2,8 @@ class_name BaseEnemy
 extends CharacterBody2D
 
 const CameraUtils = preload("res://scripts/utils/camera_utils.gd")
+const AudioUtils = preload("res://scripts/utils/audio_utils.gd")
+const CharacterUtils = preload("res://scripts/utils/character_utils.gd")
 
 ## The gravity applied to the enemy (pixels/s^2)
 @export var gravity: float = 2000.0
@@ -19,6 +21,9 @@ const CameraUtils = preload("res://scripts/utils/camera_utils.gd")
 @export var knockback_friction: float = 0.9
 ## Movement speed when following player
 @export var move_speed: float = 200.0
+## Speed range for randomization (enemies will get random speed between min and max)
+@export var min_move_speed: float = 180.0
+@export var max_move_speed: float = 220.0
 ## Detection range for player
 @export var detection_range: float = 300.0
 ## Attack range
@@ -30,6 +35,8 @@ const CameraUtils = preload("res://scripts/utils/camera_utils.gd")
 @onready var animated_sprite = $AnimatedSprite2D if has_node("AnimatedSprite2D") else null
 @onready var hitbox = $Hitbox if has_node("Hitbox") else null
 @onready var hitbox_collision_shape = $Hitbox/CollisionShape2D if has_node("Hitbox/CollisionShape2D") else null
+@onready var hurt_audio = $Hurt if has_node("Hurt") else null
+@onready var death_audio = $Death if has_node("Death") else null
 
 var current_hp: int = 0  # Will be set in _ready() after max_hp is set
 var player: CharacterBody2D = null
@@ -40,6 +47,10 @@ var attack_alternate: bool = false  # For alternating between attack animations
 
 func _ready() -> void:
 	current_hp = max_hp  # Set current_hp after max_hp is set in child's _ready()
+	
+	# Randomize movement speed within the specified range
+	move_speed = randf_range(min_move_speed, max_move_speed)
+	
 	# Ensure enemy only collides with ground, not player
 	collision_layer = 16  # Layer 5
 	collision_mask = 1    # Only check layer 1 (ground)
@@ -221,52 +232,32 @@ func take_damage(amount: int = damage_per_hit, attacker_position: Vector2 = Vect
 
 ## Called when the enemy dies with knockback effect
 func _die_with_knockback() -> void:
-	# Disable hurtbox to prevent further hits
-	if has_node("Hurtbox"):
-		$Hurtbox.set_deferred("monitoring", false)
-	
-	# Play death animation immediately during knockback
-	if is_instance_valid(animated_sprite) and animated_sprite.has_method("play"):
-		if animated_sprite.sprite_frames and animated_sprite.sprite_frames.has_animation("death"):
-			animated_sprite.play("death")
-	
-	# Wait a moment for knockback to be visible, then finish death sequence
-	await get_tree().create_timer(0.5).timeout
-	_die()
+	# Handle character death using CharacterUtils
+	CharacterUtils.handle_character_death(self, animated_sprite, "death", fatal_knockback_force)
 
 ## Called when the enemy dies
 func _die() -> void:
-	# Stop all movement
-	velocity = Vector2.ZERO
-	set_physics_process(false)  # Disable physics processing
-	
-	# Disable collision shape now that knockback is complete
-	if has_node("CollisionShape2D"):
-		$CollisionShape2D.set_deferred("disabled", true)
-	
-	# Create fade out effect (death animation is already playing)
-	var fade_tween = create_tween()
-	fade_tween.tween_property(self, "modulate:a", 0.0, 0.5).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_SINE)
-	await fade_tween.finished
-	
-	# Remove the enemy from the scene
-	queue_free()
+	# This method is now handled by CharacterUtils.handle_character_death
+	# Keeping for compatibility but the main logic is in CharacterUtils
+	pass
 
 ## Called whenever the enemy takes damage
 ## Override in child classes to customize damage behavior
 func _on_damage_taken(attacker_position: Vector2 = Vector2.ZERO) -> void:
-	# Camera shake when enemy takes damage
-	var camera := get_viewport().get_camera_2d()
-	if camera:
-		var shake_intensity = 20.0 if current_hp > 0 else 30.0  # Stronger shake for fatal hit
-		var shake_duration = 0.3 if current_hp > 0 else 0.5  # Longer shake for fatal hit
-		CameraUtils.camera_shake(camera, shake_intensity, shake_duration)
+	# Handle damage effects using CharacterUtils
+	CharacterUtils.handle_damage_effects(
+		self,
+		current_hp,
+		max_hp,
+		attacker_position,
+		20.0,  # Regular shake intensity
+		0.3,   # Regular shake duration
+		30.0,  # Fatal shake intensity
+		0.5    # Fatal shake duration
+	)
 	
-	# Create blood splash effect
-	if attacker_position != Vector2.ZERO:
-		const CharacterUtils = preload("res://scripts/utils/character_utils.gd")
-		var blood_amount = 5 if current_hp > 0 else 8  # More blood for fatal hit
-		CharacterUtils.create_blood_splash(global_position, attacker_position, blood_amount)
+	# Play damage audio
+	CharacterUtils.play_damage_audio(self, current_hp, hurt_audio, death_audio)
 	
 	# Create a tween for visual feedback when damaged
 	var tween = create_tween()
@@ -278,24 +269,10 @@ func _on_damage_taken(attacker_position: Vector2 = Vector2.ZERO) -> void:
 	
 	# Apply knockback effect
 	if current_hp > 0:
-		_apply_knockback(attacker_position, knockback_force)
+		CharacterUtils.apply_knockback(self, attacker_position, knockback_force)
 	else:
 		# Apply larger knockback for fatal hit
-		_apply_knockback(attacker_position, fatal_knockback_force)
-
-## Apply knockback force in the direction away from attacker
-func _apply_knockback(attacker_position: Vector2, force: float) -> void:
-	if attacker_position == Vector2.ZERO:
-		# Fallback to old logic if no attacker position provided
-		var current_scale = animated_sprite.scale.x if animated_sprite.has_method("get_scale") else 1.0
-		var knockback_direction = -1 if current_scale > 0 else 1
-		velocity.x = knockback_direction * force
-	else:
-		# Calculate knockback direction away from attacker
-		var knockback_direction = (global_position - attacker_position).normalized()
-		velocity.x = knockback_direction.x * force
-		# Add some upward force for better visual effect
-		velocity.y = knockback_direction.y * force * 0.5 - abs(force) * 0.3
+		CharacterUtils.apply_knockback(self, attacker_position, fatal_knockback_force)
 
 func _on_hurtbox_area_entered(area: Area2D) -> void:
 	if area.is_in_group("player_hitbox"):
