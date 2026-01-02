@@ -26,7 +26,7 @@ const CharacterUtils = preload("res://scripts/utils/character_utils.gd")
 
 # Movement Speeds
 @export var speed: float = 600.0
-@export var roll_speed: float = 1200.0
+@export var roll_speed: float = 1500.0
 @export var attack_speed: float = 300.0
 @export var attack_knockback: float = 400.0  # Knockback force when attacking
 
@@ -45,6 +45,16 @@ const CharacterUtils = preload("res://scripts/utils/character_utils.gd")
 @export var default_dust_amount: int = 0
 @export var default_landing_right_amount: int = 0
 @export var default_landing_left_amount: int = 0
+@export var max_roll_duration: float = 1.0
+
+# Squash & Stretch
+@export var jump_squash_scale := Vector2(0.85, 1.15)
+@export var jump_stretch_scale := Vector2(1.1, 0.9)
+@export var land_squash_scale := Vector2(1.2, 0.8)
+@export var squash_duration := 0.08
+
+var squash_tween: Tween
+var original_sprite_scale: Vector2
 
 # Internal State
 var was_on_floor := false
@@ -60,6 +70,12 @@ var knockback_direction := 1.0
 var current_hp: int = 100
 var max_hp: int = 100
 var is_jumping := false  # Track if currently jumping upwards
+var is_wall_jumping := false  # Track if currently wall jumping
+var wall_jump_cooldown_timer := 0.0
+@export var wall_jump_cooldown_duration: float = 0.5
+var roll_timer: float = 0.0
+var roll_input_locked: bool = false
+var wall_jump_direction_locked: bool = false
 
 @export var hitbox_duration: float = 0.1  # Duration in seconds for hitbox to be active
 
@@ -130,7 +146,63 @@ func _ready():
 	# Initialize UI health
 	_update_ui_health()
 	
+	# Store original sprite scale for squash & stretch
+	original_sprite_scale = animated_sprite_2d.scale
+	
 	# Player area initialization
+
+func _play_jump_squash() -> void:
+	if squash_tween:
+		squash_tween.kill()
+
+	animated_sprite_2d.scale = original_sprite_scale
+	squash_tween = create_tween()
+	squash_tween.set_trans(Tween.TRANS_SINE)
+	squash_tween.set_ease(Tween.EASE_OUT)
+
+	# Squish → Stretch → Normal
+	squash_tween.tween_property(
+		animated_sprite_2d,
+		"scale",
+		original_sprite_scale * jump_squash_scale,
+		squash_duration
+	)
+	squash_tween.tween_property(
+		animated_sprite_2d,
+		"scale",
+		original_sprite_scale * jump_stretch_scale,
+		squash_duration
+	)
+	squash_tween.tween_property(
+		animated_sprite_2d,
+		"scale",
+		original_sprite_scale,
+		squash_duration
+	)
+
+
+func _play_land_squash() -> void:
+	if squash_tween:
+		squash_tween.kill()
+
+	animated_sprite_2d.scale = original_sprite_scale
+	squash_tween = create_tween()
+	squash_tween.set_trans(Tween.TRANS_SINE)
+	squash_tween.set_ease(Tween.EASE_OUT)
+
+	# Squash → Normal
+	squash_tween.tween_property(
+		animated_sprite_2d,
+		"scale",
+		original_sprite_scale * land_squash_scale,
+		squash_duration
+	)
+	squash_tween.tween_property(
+		animated_sprite_2d,
+		"scale",
+		original_sprite_scale,
+		squash_duration
+	)
 
 func _on_hitbox_timer_timeout() -> void:
 	# Disable hitbox when timer ends
@@ -149,6 +221,9 @@ func _physics_process(delta: float) -> void:
 		AudioUtils.play_with_random_pitch(landing, 0.9, 1.1)
 		jump_count = 0  # Reset jump count when landing
 		is_jumping = false  # Reset jumping state when landing
+		
+		_play_land_squash()
+		
 		# Create dust burst on landing
 		ParticlesUtil.trigger_landing_burst(
 			landing_dust_particles_right,
@@ -197,27 +272,69 @@ func _physics_process(delta: float) -> void:
 			is_attacking = false
 	
 	# Roll logic - works whether horizontal or down is pressed first
-	if Input.is_action_pressed("ui_down") and is_on_floor() and not is_rolling and not is_attacking:
-		var roll_input_direction := Input.get_axis("ui_left", "ui_right")
-		if roll_input_direction != 0:  # Roll when down is held and horizontal is pressed
-			is_rolling = true
-			roll_direction = int(roll_input_direction)
-			animated_sprite_2d.animation = "roll"
-			animated_sprite_2d.flip_h = roll_input_direction < 0
+	var down_held := Input.is_action_pressed("ui_down")
+	var roll_input_direction := Input.get_axis("ui_left", "ui_right")
 	
-	# Check if roll animation has finished
-	if is_rolling and animated_sprite_2d.animation == "roll":
-		if CharacterUtils.is_animation_last_frame(animated_sprite_2d, "roll"):
+	# Start roll ONLY if input is not locked
+	if down_held and roll_input_direction != 0 and is_on_floor() and not is_rolling and not is_attacking and not roll_input_locked:
+		is_rolling = true
+		roll_direction = int(roll_input_direction)
+		roll_timer = 0.0
+		roll_input_locked = true
+
+		animated_sprite_2d.animation = "roll"
+		animated_sprite_2d.flip_h = roll_direction < 0
+	
+	# Stop roll ONLY if player hits a wall
+	if is_rolling and is_on_wall():
+		is_rolling = false
+		roll_direction = 0
+		animated_sprite_2d.animation = "idle"
+
+	# Update roll timer and auto-stop after 3 seconds
+	if is_rolling:
+		roll_timer += delta
+
+		if roll_timer >= max_roll_duration:
 			is_rolling = false
 			roll_direction = 0
 			animated_sprite_2d.animation = "idle"
 	
+	# Reset roll input lock and stop roll once player releases the roll combo
+	if roll_input_locked:
+		if not Input.is_action_pressed("ui_down") or Input.get_axis("ui_left", "ui_right") == 0:
+			roll_input_locked = false
+			# Stop roll if player releases input mid-roll
+			if is_rolling:
+				is_rolling = false
+				roll_direction = 0
+				animated_sprite_2d.animation = "idle"
+
 	# Handle sprite flipping based on horizontal input (works in air too, and during attacks)
 	if direction != 0 and not is_rolling:
 		animated_sprite_2d.flip_h = direction < 0
 		
+	# Handle wall jump animation - HIGHEST PRIORITY
+	if is_wall_jumping:
+		# Check if roll animation has finished
+		if CharacterUtils.is_animation_last_frame(animated_sprite_2d, "roll"):
+			is_wall_jumping = false
+			# Switch back to jump animation after wall jump roll completes
+			if not is_on_floor():
+				animated_sprite_2d.animation = "jump"
+	
+	# Update wall jump cooldown timer
+	if wall_jump_cooldown_timer > 0:
+		wall_jump_cooldown_timer -= delta
+	
+	# Reset wall jump direction lock once player releases and presses direction again or lands on floor
+	if wall_jump_direction_locked:
+		var current_direction := Input.get_axis("ui_left", "ui_right")
+		if current_direction == 0 or is_on_floor():  # Player released direction OR landed on floor
+			wall_jump_direction_locked = false
+	
 	# Handle running animation and sound (only on ground)
-	if not is_attacking and not is_rolling:
+	if not is_attacking and not is_rolling and not is_wall_jumping:
 		if (moving_right or moving_left) and is_on_floor():
 			animated_sprite_2d.animation = "run"
 			if not walk.playing:
@@ -227,25 +344,36 @@ func _physics_process(delta: float) -> void:
 			animated_sprite_2d.animation = "idle"
 	
 	if not is_on_floor():
-		if not is_attacking and not is_rolling:
-			animated_sprite_2d.animation = "jump"
-		velocity = CharacterUtils.apply_gravity(velocity, get_gravity(), delta, fall_gravity_multiplier)
-		# Apply wall sliding using custom raycast detection with hysteresis
-		var is_on_wall_now = is_on_wall_custom()
-		
-		# Handle wall sliding without hysteresis
-		if is_on_wall_now:
-			# Reset jump count when touching wall (for wall jumps)
-			if jump_count > 0:
-				jump_count = 0
-				print("Jump count reset by wall contact")
-		
-		if is_on_wall_now and velocity.y > 0:  # Only when falling, not jumping up
-			print("Wall sliding activated - setting velocity.y to: ", wall_slide_speed)
-			# Gradually reduce downward velocity to wall slide speed
-			velocity.y = wall_slide_speed
+		if not is_attacking and not is_rolling and not is_wall_jumping:
+			# Check if player is wall sliding
+			var is_on_wall_now = is_on_wall_custom()
+			if is_on_wall_now and velocity.y > 0:  # Only when falling, not jumping up
+				animated_sprite_2d.animation = "wall_slide"
+				# Face away from wall when sliding
+				if left_wall_detector.is_colliding():
+					animated_sprite_2d.flip_h = false  # Face right when wall is on left
+				elif right_wall_detector.is_colliding():
+					animated_sprite_2d.flip_h = true   # Face left when wall is on right
+			else:
+				animated_sprite_2d.animation = "jump"
+	velocity = CharacterUtils.apply_gravity(velocity, get_gravity(), delta, fall_gravity_multiplier)
+	# Apply wall sliding using custom raycast detection with hysteresis
+	var is_on_wall_now = is_on_wall_custom()
+	
+	# Handle wall sliding without hysteresis
+	if is_on_wall_now:
+		# Reset jump count when touching wall (for wall jumps)
+		if jump_count > 0:
+			jump_count = 0
+	
+	if is_on_wall_now and velocity.y > 0:  # Only when falling, not jumping up
+		# Gradually reduce downward velocity to wall slide speed
+		velocity.y = wall_slide_speed
 
 	if Input.is_action_just_pressed("ui_accept") and jump_count < max_jumps and not is_rolling:
+		# Check if player was wall-sliding before jump
+		var was_wall_sliding = is_on_wall_custom()
+		
 		velocity.y = jump_velocity
 		jump_count += 1
 		is_jumping = true  # Start jumping state
@@ -253,6 +381,20 @@ func _physics_process(delta: float) -> void:
 		# Start dust trail for jump
 		jump_dust_timer = jump_dust_duration
 		dust_particles.emitting = true
+		
+		_play_jump_squash()
+		
+		# Wall jump: automatically jump away from wall if was wall-sliding
+		if was_wall_sliding:
+			var wall_jump_dir = get_wall_jump_direction()
+			if wall_jump_dir != 0:
+				velocity.x = wall_jump_dir * speed * 2.5  # Strong wall jump force
+				is_wall_jumping = true
+				wall_jump_cooldown_timer = wall_jump_cooldown_duration
+				wall_jump_direction_locked = true  # Lock direction input after wall jump
+				animated_sprite_2d.animation = "roll"
+				animated_sprite_2d.flip_h = wall_jump_dir < 0  # Face away from wall
+				animated_sprite_2d.play()
 	
 	# Variable jump height: apply extra gravity when jump button is released
 	if is_jumping and not Input.is_action_pressed("ui_accept"):
@@ -273,7 +415,7 @@ func _physics_process(delta: float) -> void:
 		else:
 			current_speed = speed
 		
-		if direction != 0:
+		if direction != 0 and not is_wall_jumping and wall_jump_cooldown_timer <= 0 and not wall_jump_direction_locked:
 			velocity.x = direction * current_speed
 			# Allow changing direction during attack
 			if is_attacking and sign(direction) != sign(velocity.x):
@@ -283,7 +425,7 @@ func _physics_process(delta: float) -> void:
 		elif is_rolling:
 			# Continue rolling in the stored direction even if keys are released
 			velocity.x = roll_direction * roll_speed
-		else:
+		elif not is_wall_jumping:
 			velocity.x = move_toward(velocity.x, 0, speed)
 
 	CharacterUtils.update_hitbox_position_x(hitbox, original_hitbox_position, animated_sprite_2d.flip_h)
@@ -344,23 +486,25 @@ func is_on_wall_custom() -> bool:
 	var right_colliding = right_wall_detector.is_colliding()
 	var result = left_colliding or right_colliding
 	
-	# Debug logging with more details
-	print("Wall Detection - Left: ", left_colliding, " Right: ", right_colliding, " Result: ", result)
-	print("Left raycast pos: ", left_wall_detector.global_position, " target: ", left_wall_detector.target_position)
-	print("Right raycast pos: ", right_wall_detector.global_position, " target: ", right_wall_detector.target_position)
-	print("Left collision mask: ", left_wall_detector.collision_mask, " Right collision mask: ", right_wall_detector.collision_mask)
-	
-	if left_colliding:
-		print("Left hit collider: ", left_wall_detector.get_collider())
-	if right_colliding:
-		print("Right hit collider: ", right_wall_detector.get_collider())
-	
 	return result
+
+func get_wall_jump_direction() -> int:
+	"""Returns the direction to jump away from wall: 1 for right, -1 for left, 0 for no wall"""
+	var left_colliding = left_wall_detector.is_colliding()
+	var right_colliding = right_wall_detector.is_colliding()
+	
+	if left_colliding and not right_colliding:
+		return 1  # Jump right when touching left wall
+	elif right_colliding and not left_colliding:
+		return -1  # Jump left when touching right wall
+	else:
+		return 0  # No clear wall direction or touching both walls
 
 func _on_hurtbox_area_entered(area: Area2D) -> void:
 	"""Called when enemy hitbox enters player hurtbox"""
 	# Check if the entering area is an enemy hitbox (but not our own hitbox)
-	if area.collision_layer == 2 and area != hitbox:  # Enemy hitboxes are on layer 2, exclude our own hitbox
+	# Player is invulnerable during rolls
+	if area.collision_layer == 2 and area != hitbox and not is_rolling:  # Enemy hitboxes are on layer 2, exclude our own hitbox and check not rolling
 		var enemy = area.get_parent()
 		var enemy_position = enemy.global_position if enemy else Vector2.ZERO
 		

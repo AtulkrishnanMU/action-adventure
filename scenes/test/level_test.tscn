@@ -62,10 +62,12 @@ position = Vector2(682, 308)
 position = Vector2(697, 308)
 
 [node name="Crate" parent="." instance=ExtResource("4_sogyd")]
-position = Vector2(1167, 305)
+position = Vector2(281, -474)
 scale = Vector2(1, 0.9634685)
 
 [node name="StaticBody2D" type="StaticBody2D" parent="."]
+position = Vector2(-843, 0)
+scale = Vector2(2.9925776, 1.0182104)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="StaticBody2D"]
 position = Vector2(796.75, 404)
@@ -88,13 +90,13 @@ shape = SubResource("RectangleShape2D_kq4re")
 
 [node name="ColorRect" type="ColorRect" parent="StaticBody2D2"]
 offset_left = 332.0
-offset_top = 335.0
+offset_top = 336.09918
 offset_right = 1267.0
 offset_bottom = 489.0
 color = Color(0.27134386, 0.008001301, 1.2032688e-08, 1)
 
 [node name="StaticBody2D3" type="StaticBody2D" parent="."]
-position = Vector2(956.9999, -1024.9999)
+position = Vector2(1002.9999, -1024.9999)
 rotation = 1.5715367
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="StaticBody2D3"]
@@ -112,7 +114,7 @@ color = Color(0.27134386, 0.008001301, 1.2032688e-08, 1)
 position = Vector2(998, 289)
 
 [node name="SmallEnemy3" parent="." instance=ExtResource("5_sogyd")]
-position = Vector2(1082, 292)
+position = Vector2(932, 106)
 
 [node name="SmallEnemy4" parent="." instance=ExtResource("5_sogyd")]
 position = Vector2(797, 297)

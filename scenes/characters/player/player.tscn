@@ -1,4 +1,4 @@
-[gd_scene load_steps=71 format=3 uid="uid://b5xhiwa1iy42"]
+[gd_scene load_steps=73 format=3 uid="uid://b5xhiwa1iy42"]
 
 [ext_resource type="Script" uid="uid://fbqmytkglb1t" path="res://scenes/characters/player/player.gd" id="1_6avc5"]
 [ext_resource type="AudioStream" uid="uid://dchro2t67htf4" path="res://sounds/landing.mp3" id="2_42irl"]
@@ -12,6 +12,7 @@
 [ext_resource type="Texture2D" uid="uid://bpbtinlj1e5g1" path="res://sprites/characters/player/player_jump.png" id="10_blysn"]
 [ext_resource type="Texture2D" uid="uid://dnjvt8kdhj65g" path="res://sprites/characters/player/player_roll.png" id="11_bsn6e"]
 [ext_resource type="Texture2D" uid="uid://lvb10raqid4l" path="res://sprites/characters/player/player_run.png" id="12_bsn6e"]
+[ext_resource type="Texture2D" uid="uid://x8qptwxki5x8" path="res://sprites/characters/player/wall_slide.png" id="13_4kqyw"]
 [ext_resource type="Texture2D" uid="uid://l1mh47fj36fa" path="res://sprites/effects/dust.png" id="13_dust"]
 [ext_resource type="AudioStream" uid="uid://lkkxnhrvmrgl" path="res://sounds/hit.mp3" id="14_hv5x3"]
 [ext_resource type="AudioStream" uid="uid://m1xbggirxheh" path="res://sounds/small_enemy/small_enemy_hurt/hurt3.mp3" id="14_i1nod"]
@@ -209,6 +210,10 @@ region = Rect2(4016, 0, 502, 502)
 atlas = ExtResource("12_bsn6e")
 region = Rect2(4518, 0, 502, 502)
 
+[sub_resource type="AtlasTexture" id="AtlasTexture_1avqj"]
+atlas = ExtResource("13_4kqyw")
+region = Rect2(0, 0, 500, 500)
+
 [sub_resource type="SpriteFrames" id="SpriteFrames_sulyr"]
 animations = [{
 "frames": [{
@@ -358,7 +363,7 @@ animations = [{
 }],
 "loop": true,
 "name": &"roll",
-"speed": 12.0
+"speed": 25.0
 }, {
 "frames": [{
 "duration": 1.0,
@@ -394,6 +399,14 @@ animations = [{
 "loop": true,
 "name": &"run",
 "speed": 12.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_1avqj")
+}],
+"loop": true,
+"name": &"wall_slide",
+"speed": 5.0
 }]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_6avc5"]
@@ -466,8 +479,9 @@ stream = ExtResource("5_3xnwo")
 position = Vector2(-4.0000157, 4.999999)
 scale = Vector2(0.4661355, 0.4661355)
 sprite_frames = SubResource("SpriteFrames_sulyr")
-animation = &"death"
+animation = &"fall"
 autoplay = "idle"
+frame_progress = 0.43556416
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(-1.4800978, 5.9203925)
