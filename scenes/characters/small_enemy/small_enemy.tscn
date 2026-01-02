@@ -136,7 +136,7 @@ animations = [{
 }],
 "loop": true,
 "name": &"attack",
-"speed": 15.0
+"speed": 24.0
 }, {
 "frames": [{
 "duration": 1.0,
@@ -231,17 +231,16 @@ shape = SubResource("1")
 position = Vector2(9.536743e-07, -14.492214)
 scale = Vector2(2.6574397, 2.65744)
 sprite_frames = SubResource("SpriteFrames_emrrk")
-animation = &"death"
+animation = &"attack"
 autoplay = "idle"
-frame = 3
-frame_progress = 1.0
+frame_progress = 0.94394845
 
 [node name="Hitbox" type="Area2D" parent="."]
+position = Vector2(59.5791, 0)
 collision_layer = 2
 collision_mask = 4
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Hitbox"]
-position = Vector2(59.5791, 0)
 scale = Vector2(2, 2)
 shape = SubResource("1")
 
@@ -250,3 +249,11 @@ stream = ExtResource("6_ky0x4")
 
 [node name="Hurt" type="AudioStreamPlayer2D" parent="."]
 stream = ExtResource("7_y8fny")
+
+[node name="LeftRaycast" type="RayCast2D" parent="."]
+target_position = Vector2(-800, 0)
+collision_mask = 2
+
+[node name="RightRaycast" type="RayCast2D" parent="."]
+target_position = Vector2(800, 0)
+collision_mask = 2

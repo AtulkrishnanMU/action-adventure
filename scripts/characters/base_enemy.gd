@@ -37,6 +37,12 @@ const CharacterUtils = preload("res://scripts/utils/character_utils.gd")
 @onready var hitbox_collision_shape = $Hitbox/CollisionShape2D if has_node("Hitbox/CollisionShape2D") else null
 @onready var hurt_audio = $Hurt if has_node("Hurt") else null
 @onready var death_audio = $Death if has_node("Death") else null
+@onready var left_raycast = $LeftRaycast if has_node("LeftRaycast") else null
+@onready var right_raycast = $RightRaycast if has_node("RightRaycast") else null
+
+# Hitbox positioning
+var original_hitbox_position: Vector2
+var hitbox_offset_x: float
 
 var current_hp: int = 0  # Will be set in _ready() after max_hp is set
 var player: CharacterBody2D = null
@@ -44,6 +50,8 @@ var is_attacking: bool = false
 var attack_cooldown_timer: float = 0.0
 var can_attack: bool = true
 var attack_alternate: bool = false  # For alternating between attack animations
+var hitbox_enabled_frame: int = -1  # Track when hitbox was enabled to avoid checking too early
+var player_detected: bool = false  # Track if player is detected by raycasts
 
 func _ready() -> void:
 	current_hp = max_hp  # Set current_hp after max_hp is set in child's _ready()
@@ -60,8 +68,14 @@ func _ready() -> void:
 		hitbox.area_entered.connect(_on_hitbox_area_entered)
 		if hitbox_collision_shape:
 			hitbox_collision_shape.disabled = true
+			# Store original hitbox position
+			original_hitbox_position = hitbox.position
+			hitbox_offset_x = original_hitbox_position.x
 	# Find the player in the scene
 	_find_player()
+	
+	# Setup raycasts for player detection
+	_setup_raycast_detection()
 
 func _find_player() -> void:
 	var scene_tree = Engine.get_main_loop() as SceneTree
@@ -73,7 +87,93 @@ func _find_player() -> void:
 				player = p
 				break
 
+func _setup_raycast_detection() -> void:
+	# Configure raycasts for player detection
+	if left_raycast:
+		left_raycast.target_position = Vector2(-detection_range * 1.5, 0)  # Increased distance
+		left_raycast.collision_mask = 2  # Player layer
+		left_raycast.enabled = true
+	
+	if right_raycast:
+		right_raycast.target_position = Vector2(detection_range * 1.5, 0)  # Increased distance
+		right_raycast.collision_mask = 2  # Player layer
+		right_raycast.enabled = true
+
+func _update_raycast_detection() -> void:
+	# Raycasts always emit in both directions with increased distance
+	if left_raycast:
+		left_raycast.target_position = Vector2(-detection_range * 1.5, 0)
+	
+	if right_raycast:
+		right_raycast.target_position = Vector2(detection_range * 1.5, 0)
+	
+	# Check if either raycast detects the player
+	player_detected = false
+	if left_raycast and left_raycast.is_colliding():
+		var collider = left_raycast.get_collider()
+		if collider and (collider.has_method("is_player") or collider.name.to_lower().contains("player")):
+			player_detected = true
+	
+	if right_raycast and right_raycast.is_colliding():
+		var collider = right_raycast.get_collider()
+		if collider and (collider.has_method("is_player") or collider.name.to_lower().contains("player")):
+			player_detected = true
+
+func _check_hitbox_hurtbox_overlap() -> bool:
+	# Check if enemy's hitbox overlaps with player's hurtbox
+	if not hitbox or not player or not player.has_node("Hurtbox"):
+		return false
+	
+	var player_hurtbox = player.get_node("Hurtbox")
+	if not player_hurtbox:
+		return false
+	
+	# Use distance check as a simple overlap detection
+	var hitbox_global_pos = hitbox.global_position
+	var hurtbox_global_pos = player_hurtbox.global_position
+	var distance = hitbox_global_pos.distance_to(hurtbox_global_pos)
+	
+	# Use a threshold to determine overlap (considering hitbox and hurtbox sizes)
+	var overlap_threshold = 40.0  # Adjust based on your hitbox/hurtbox sizes
+	return distance <= overlap_threshold
+
 func _physics_process(delta: float) -> void:
+	
+	# Try to find player if not available
+	if not player:
+		_find_player()
+	
+	# Check if player is dead and force enemy to idle state
+	if player:
+		var player_is_dead = false
+		
+		# Check multiple ways to detect player death
+		if player.has_method("is_dead"):
+			player_is_dead = player.is_dead
+		elif player.has_method("get"):
+			# Try to get is_dead property
+			if "is_dead" in player:
+				player_is_dead = player.is_dead
+		
+		# Also check if player physics is disabled (common death state)
+		if not player_is_dead and not player.is_physics_processing():
+			player_is_dead = true
+			
+		if player_is_dead:
+			# Force enemy out of attack state
+			if is_attacking:
+				_finish_attack()
+			# Force disable hitbox
+			if hitbox_collision_shape:
+				hitbox_collision_shape.disabled = true
+			# Stop all movement
+			velocity.x = 0
+			velocity.y = 0
+			# Play idle animation
+			if animated_sprite and animated_sprite.sprite_frames and animated_sprite.sprite_frames.has_animation("idle"):
+				animated_sprite.animation = "idle"
+			return
+	
 	# Update attack cooldown
 	if attack_cooldown_timer > 0:
 		attack_cooldown_timer -= delta
@@ -92,6 +192,8 @@ func _physics_process(delta: float) -> void:
 	
 	# AI behavior
 	if not is_attacking and current_hp > 0:
+		# Update raycast detection
+		_update_raycast_detection()
 		_update_ai_behavior()
 	
 	# Check if attack animation has finished
@@ -100,60 +202,70 @@ func _physics_process(delta: float) -> void:
 		if CharacterUtils.is_animation_last_frame(animated_sprite, animated_sprite.animation):
 			_finish_attack()
 	
+	# During attack, check if player's hurtbox is still overlapping
+	# Only check after hitbox has been enabled for at least 2 frames to allow collision detection to register
+	if is_attacking and hitbox and hitbox_collision_shape and not hitbox_collision_shape.disabled:
+		if hitbox_enabled_frame >= 0 and Engine.get_physics_frames() - hitbox_enabled_frame >= 2:
+			# Check if player's hurtbox is still overlapping
+			if not _check_hitbox_hurtbox_overlap():
+				# Player moved out of range, disable hitbox but keep attack animation
+				hitbox_collision_shape.disabled = true
+	
+	# Update hitbox position based on facing direction (like player)
+	if hitbox and original_hitbox_position:
+		CharacterUtils.update_hitbox_position_x(hitbox, original_hitbox_position, animated_sprite.flip_h, 100.0)
+	
 	# Apply movement
 	move_and_slide()
 
 func _finish_attack() -> void:
-	print("Finishing attack")
 	is_attacking = false
 	# Disable hitbox
 	if hitbox_collision_shape:
 		hitbox_collision_shape.disabled = true
-		print("Hitbox disabled")
+	hitbox_enabled_frame = -1
 
 func _update_ai_behavior() -> void:
 	if not player:
 		_find_player()
 		return
 	
-	var distance_to_player = global_position.distance_to(player.global_position)
+	# Stop all AI behavior if player is dead
+	if player.has_method("is_dead") and player.is_dead:
+		velocity.x = 0
+		if animated_sprite and animated_sprite.sprite_frames and animated_sprite.sprite_frames.has_animation("idle"):
+			animated_sprite.animation = "idle"
+		return
 	
-	# Debug output
-	if Engine.get_process_frames() % 60 == 0:  # Print once per second
-		print("Enemy AI - Distance to player: ", distance_to_player, " Detection range: ", detection_range, " Attack range: ", attack_range)
-		print("Can attack: ", can_attack, " Is attacking: ", is_attacking)
-	
-	# Check if player is in detection range
-	if distance_to_player <= detection_range:
+	# Use raycast detection instead of distance-based detection
+	if player_detected:
 		# Face the player
 		if player.global_position.x < global_position.x:
 			animated_sprite.flip_h = true
 		else:
 			animated_sprite.flip_h = false
 		
-		# Check if in attack range
-		if distance_to_player <= attack_range:
+		# Update hitbox position based on facing direction
+		if hitbox and original_hitbox_position:
+			CharacterUtils.update_hitbox_position_x(hitbox, original_hitbox_position, animated_sprite.flip_h, 80.0)
+		
+		# Check if hitbox overlaps with player's hurtbox
+		if _check_hitbox_hurtbox_overlap():
 			if can_attack and not is_attacking:
-				print("In attack range! Distance: ", distance_to_player, " <= ", attack_range)
 				_start_attack()
 			else:
-				# In attack range but can't attack (cooldown or already attacking)
-				print("In attack range but cannot attack - cooldown: ", not can_attack, " attacking: ", is_attacking)
 				velocity.x = 0
 				# Play idle animation when waiting for cooldown or between attacks
 				if animated_sprite and animated_sprite.sprite_frames and animated_sprite.sprite_frames.has_animation("idle"):
 					animated_sprite.animation = "idle"
 		elif not is_attacking:  # Only move if not currently attacking
-			# Move towards player
 			_move_towards_player()
 		else:
-			print("Cannot move - is attacking")
 			# Stop movement and play idle when attacking or on cooldown
 			velocity.x = 0
 			if animated_sprite and animated_sprite.sprite_frames and animated_sprite.sprite_frames.has_animation("idle"):
 				animated_sprite.animation = "idle"
 	else:
-		# Player not detected, play idle
 		velocity.x = 0
 		if animated_sprite and animated_sprite.sprite_frames and animated_sprite.sprite_frames.has_animation("idle"):
 			animated_sprite.animation = "idle"
@@ -175,10 +287,25 @@ func _start_attack() -> void:
 	
 	# Don't attack if being knocked back (has significant velocity)
 	if abs(velocity.x) > 50:
-		print("Cannot attack - being knocked back")
 		return
 	
-	print("Starting attack! Distance: ", global_position.distance_to(player.global_position) if player else "no player")
+	var player_is_dead = false
+	
+	# Check multiple ways to detect player death
+	if player and player.has_method("is_dead"):
+		player_is_dead = player.is_dead
+	elif player and "is_dead" in player:
+		player_is_dead = player.is_dead
+	
+	# Also check if player physics is disabled
+	if not player_is_dead and player and not player.is_physics_processing():
+		player_is_dead = true
+	
+	
+	# Additional check for player death before starting attack
+	if player_is_dead:
+		return
+	
 	is_attacking = true
 	can_attack = false
 	attack_cooldown_timer = attack_cooldown
@@ -201,25 +328,26 @@ func _start_attack() -> void:
 	if attack_animations.size() > 0:
 		chosen_attack = attack_animations[randi() % attack_animations.size()]
 	
-	print("Playing attack animation: ", chosen_attack)
 	
 	# Play the chosen attack animation
 	if animated_sprite and animated_sprite.sprite_frames and animated_sprite.sprite_frames.has_animation(chosen_attack):
 		animated_sprite.animation = chosen_attack
-	else:
-		print("Attack animation '", chosen_attack, "' not found")
 	
 	# Enable hitbox
 	if hitbox_collision_shape:
 		hitbox_collision_shape.disabled = false
-		print("Hitbox enabled")
+		hitbox_enabled_frame = Engine.get_physics_frames()
 
 func _on_hitbox_area_entered(area: Area2D) -> void:
 	if area.is_in_group("player_area"):
-		# Hit the player
+		# Hit player - check if player is alive
 		var player_node = area.get_parent()
-		if player_node and player_node.has_method("take_damage"):
-			player_node.take_damage(1, global_position)
+		if player_node and player_node.has_method("is_player") and not player_node.is_dead:
+			# Play hit sound on player when hitting enemy
+			if player_node.has_method("play_hit_sound"):
+				player_node.play_hit_sound()
+			
+			take_damage(damage_per_hit, player_node.global_position)
 
 ## Called when the enemy takes damage
 func take_damage(amount: int = damage_per_hit, attacker_position: Vector2 = Vector2.ZERO) -> void:

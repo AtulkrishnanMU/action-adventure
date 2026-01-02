@@ -44,7 +44,8 @@ static func is_animation_last_frame(sprite: AnimatedSprite2D, animation: String 
 static func update_hitbox_position_x(
 	hitbox: Node2D,
 	original_position: Vector2,
-	flip_h: bool
+	flip_h: bool,
+	flip_offset: float = 60.0
 ) -> void:
 	if not hitbox:
 		return
@@ -52,12 +53,11 @@ static func update_hitbox_position_x(
 	var x: float = original_position.x
 
 	hitbox.position = Vector2(
-		x - 60 if flip_h else x,
+		x - flip_offset if flip_h else x,
 		original_position.y
 	)
 
 static func create_blood_splash(character_position: Vector2, attacker_position: Vector2, amount: int = 10) -> void:
-	print("Creating blood splash at: ", character_position, " from attacker: ", attacker_position)
 	var direction = (character_position - attacker_position).normalized()
 	
 	# Create blood splash using the new system
@@ -65,7 +65,6 @@ static func create_blood_splash(character_position: Vector2, attacker_position: 
 	var blood_splash = blood_splash_scene.instantiate()
 	
 	if blood_splash:
-		print("Blood splash instance created successfully")
 		# Add to scene tree
 		var scene_tree = Engine.get_main_loop() as SceneTree
 		if scene_tree and scene_tree.current_scene:
@@ -76,11 +75,8 @@ static func create_blood_splash(character_position: Vector2, attacker_position: 
 			# Set position and direction
 			blood_splash.global_position = character_position
 			blood_splash.set_direction(direction)
-			print("Blood splash added to scene")
-		else:
-			print("Failed to get current scene")
 	else:
-		print("Failed to instantiate blood splash")
+		pass
 
 # Damage and death methods
 static func handle_damage_effects(
@@ -164,13 +160,13 @@ static func apply_knockback(
 			current_scale = sprite.scale.x if sprite.has_method("get_scale") else 1.0
 		var knockback_direction = -1 if current_scale > 0 else 1
 		if character.has_method("set"):
-			character.set("velocity.x", knockback_direction * force)
+			character.velocity.x = knockback_direction * force
 	else:
 		# Calculate knockback direction away from attacker
 		var knockback_direction = (character.global_position - attacker_position).normalized()
 		if character.has_method("set"):
-			character.set("velocity.x", knockback_direction.x * force)
-			character.set("velocity.y", knockback_direction.y * force * 0.5 - abs(force) * upward_force_multiplier)
+			character.velocity.x = knockback_direction.x * force
+			character.velocity.y = knockback_direction.y * force * 0.5 - abs(force) * upward_force_multiplier
 
 static func play_damage_audio(
 	character: Node2D,

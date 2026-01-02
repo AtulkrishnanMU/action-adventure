@@ -78,6 +78,36 @@ offset_right = 1267.0
 offset_bottom = 489.0
 color = Color(0.27134386, 0.008001301, 1.2032688e-08, 1)
 
+[node name="StaticBody2D2" type="StaticBody2D" parent="."]
+position = Vector2(695.00006, -775.0001)
+rotation = 1.5715367
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="StaticBody2D2"]
+position = Vector2(796.75, 404)
+shape = SubResource("RectangleShape2D_kq4re")
+
+[node name="ColorRect" type="ColorRect" parent="StaticBody2D2"]
+offset_left = 332.0
+offset_top = 335.0
+offset_right = 1267.0
+offset_bottom = 489.0
+color = Color(0.27134386, 0.008001301, 1.2032688e-08, 1)
+
+[node name="StaticBody2D3" type="StaticBody2D" parent="."]
+position = Vector2(956.9999, -1024.9999)
+rotation = 1.5715367
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="StaticBody2D3"]
+position = Vector2(796.75, 404)
+shape = SubResource("RectangleShape2D_kq4re")
+
+[node name="ColorRect" type="ColorRect" parent="StaticBody2D3"]
+offset_left = 332.0
+offset_top = 335.0
+offset_right = 1267.0
+offset_bottom = 472.49268
+color = Color(0.27134386, 0.008001301, 1.2032688e-08, 1)
+
 [node name="SmallEnemy2" parent="." instance=ExtResource("5_sogyd")]
 position = Vector2(998, 289)
 

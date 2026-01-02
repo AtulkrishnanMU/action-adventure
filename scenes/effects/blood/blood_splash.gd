@@ -3,10 +3,10 @@ extends Node2D
 const BLOOD_DROPLET_SCENE := preload("res://scenes/effects/blood/blood_droplet/blood_droplet.tscn")
 const BLOOD_FLOATING_DECAL_SCENE := preload("res://scenes/effects/blood/blood_floating_droplet/blood_floating_decal.tscn")
 const AudioUtils = preload("res://scripts/utils/audio_utils.gd")
-const DROPLET_COUNT := 20
-const FLOATING_DECAL_COUNT := 8  # Increased count since we're removing droplets
-const DEAD_ENEMY_DROPLET_COUNT := 8  # Reduced blood for dead enemies
-const DEAD_ENEMY_FLOATING_DECAL_COUNT := 4  # Increased for dead enemies
+const DROPLET_COUNT := 35
+const FLOATING_DECAL_COUNT := 15  # Increased count since we're removing droplets
+const DEAD_ENEMY_DROPLET_COUNT := 20  # Reduced blood for dead enemies
+const DEAD_ENEMY_FLOATING_DECAL_COUNT := 10  # Increased for dead enemies
 
 # Configurable speed values
 @export var droplet_min_speed: float = 600.0
@@ -24,8 +24,6 @@ var is_dead_enemy: bool = false  # Flag to reduce blood amount
 @onready var audio_player = $BloodSplash
 
 func _ready() -> void:
-	print("Blood splash created at position: ", global_position, " with direction: ", direction)
-	
 	# Play blood splash sound with random pitch
 	if audio_player:
 		AudioUtils.play_with_random_pitch(audio_player, 0.8, 1.2)
@@ -39,11 +37,8 @@ func set_dead_enemy(dead: bool) -> void:
 	is_dead_enemy = dead
 
 func _spawn_blood_droplets() -> void:
-	print("Spawning blood droplets...")
 	var droplet_count = DEAD_ENEMY_DROPLET_COUNT if is_dead_enemy else DROPLET_COUNT
 	var floating_decal_count = DEAD_ENEMY_FLOATING_DECAL_COUNT if is_dead_enemy else FLOATING_DECAL_COUNT
-	
-	print("Droplets: ", droplet_count, " Floating decals: ", floating_decal_count)
 	
 	# Spawn regular falling droplets
 	for i in range(droplet_count):

@@ -1,4 +1,4 @@
-[gd_scene load_steps=69 format=3 uid="uid://b5xhiwa1iy42"]
+[gd_scene load_steps=71 format=3 uid="uid://b5xhiwa1iy42"]
 
 [ext_resource type="Script" uid="uid://fbqmytkglb1t" path="res://scenes/characters/player/player.gd" id="1_6avc5"]
 [ext_resource type="AudioStream" uid="uid://dchro2t67htf4" path="res://sounds/landing.mp3" id="2_42irl"]
@@ -14,6 +14,8 @@
 [ext_resource type="Texture2D" uid="uid://lvb10raqid4l" path="res://sprites/characters/player/player_run.png" id="12_bsn6e"]
 [ext_resource type="Texture2D" uid="uid://l1mh47fj36fa" path="res://sprites/effects/dust.png" id="13_dust"]
 [ext_resource type="AudioStream" uid="uid://lkkxnhrvmrgl" path="res://sounds/hit.mp3" id="14_hv5x3"]
+[ext_resource type="AudioStream" uid="uid://m1xbggirxheh" path="res://sounds/small_enemy/small_enemy_hurt/hurt3.mp3" id="14_i1nod"]
+[ext_resource type="AudioStream" uid="uid://c2ff3ruq7yhl4" path="res://sounds/small_enemy/small_enemy_hurt/hurt.mp3" id="15_4kqyw"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_djydg"]
 atlas = ExtResource("6_xuses")
@@ -271,7 +273,7 @@ animations = [{
 "duration": 1.0,
 "texture": SubResource("AtlasTexture_sulyr")
 }],
-"loop": true,
+"loop": false,
 "name": &"death",
 "speed": 12.0
 }, {
@@ -395,7 +397,7 @@ animations = [{
 }]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_6avc5"]
-size = Vector2(84, 112)
+size = Vector2(44.68156, 112)
 
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_dust"]
 particle_flag_disable_z = true
@@ -441,6 +443,7 @@ size = Vector2(116.48622, 60)
 [node name="Player" type="CharacterBody2D"]
 scale = Vector2(0.6756309, 0.6756309)
 collision_layer = 2
+safe_margin = 0.14
 script = ExtResource("1_6avc5")
 attack_knockback = 200.0
 
@@ -463,11 +466,11 @@ stream = ExtResource("5_3xnwo")
 position = Vector2(-4.0000157, 4.999999)
 scale = Vector2(0.4661355, 0.4661355)
 sprite_frames = SubResource("SpriteFrames_sulyr")
-animation = &"idle"
+animation = &"death"
 autoplay = "idle"
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-position = Vector2(-12, 6)
+position = Vector2(-1.4800978, 5.9203925)
 shape = SubResource("RectangleShape2D_6avc5")
 
 [node name="DustParticles" type="GPUParticles2D" parent="."]
@@ -499,10 +502,11 @@ explosiveness = 1.0
 process_material = SubResource("ParticleProcessMaterial_landing_dust_left")
 
 [node name="PlayerArea" type="Area2D" parent="."]
+position = Vector2(13.320892, 0)
 collision_layer = 4
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="PlayerArea"]
-position = Vector2(-11.840786, 5.920393)
+position = Vector2(-17.900501, 5.920393)
 scale = Vector2(1.0000001, 1.0000001)
 shape = SubResource("RectangleShape2D_6avc5")
 
@@ -520,11 +524,13 @@ shape = SubResource("RectangleShape2D_hitbox")
 one_shot = true
 
 [node name="Hurtbox" type="Area2D" parent="."]
+position = Vector2(13.320885, 0)
 collision_layer = 4
 collision_mask = 2
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
-position = Vector2(-11.840788, 5.9203916)
+position = Vector2(-14.060934, 5.920393)
+scale = Vector2(1.0000001, 1.0000001)
 shape = SubResource("RectangleShape2D_6avc5")
 
 [node name="Camera2D" type="Camera2D" parent="."]
@@ -532,5 +538,21 @@ position = Vector2(-8.880592, -173.17146)
 scale = Vector2(0.46613553, 0.46613553)
 position_smoothing_enabled = true
 
+[node name="Death" type="AudioStreamPlayer2D" parent="."]
+scale = Vector2(1.0000001, 1.0000001)
+stream = ExtResource("14_i1nod")
+
+[node name="Hurt" type="AudioStreamPlayer2D" parent="."]
+scale = Vector2(1.0000001, 1.0000001)
+stream = ExtResource("15_4kqyw")
+
 [node name="Hit" type="AudioStreamPlayer2D" parent="."]
 stream = ExtResource("14_hv5x3")
+
+[node name="LeftWallDetector" type="RayCast2D" parent="."]
+position = Vector2(-15, 0)
+target_position = Vector2(-20.522352, 0)
+
+[node name="RightWallDetector" type="RayCast2D" parent="."]
+position = Vector2(15, 0)
+target_position = Vector2(20, 0)
