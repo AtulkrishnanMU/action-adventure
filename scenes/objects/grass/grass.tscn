@@ -2,9 +2,7 @@
 
 [ext_resource type="Texture2D" uid="uid://cdjnlfo6bcesq" path="res://sprites/objects/grass_blade.png" id="1_abcde"]
 [ext_resource type="Script" uid="uid://b75akj8d0xco5" path="res://scenes/objects/grass/grass.gd" id="2_abcde"]
-
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_d8nlo"]
-size = Vector2(22, 37)
+[ext_resource type="AudioStream" uid="uid://cpkqqfit8jbxf" path="res://sounds/grass-cut.mp3" id="3_uh5ru"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_collision"]
 size = Vector2(22, 37)
@@ -33,12 +31,14 @@ shape = SubResource("RectangleShape2D_collision")
 
 [node name="Hurtbox" type="Area2D" parent="."]
 position = Vector2(0, 16.5)
-monitoring = true
 collision_layer = 4
 collision_mask = 2
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
 shape = SubResource("RectangleShape2D_collision")
+
+[node name="GrassCut" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("3_uh5ru")
 
 [connection signal="area_entered" from="Area2D" to="." method="_on_area_entered"]
 [connection signal="area_entered" from="Hurtbox" to="." method="_on_hurtbox_area_entered"]

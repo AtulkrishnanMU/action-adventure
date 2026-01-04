@@ -94,12 +94,13 @@ static func handle_damage_effects(
 	fatal_shake_duration: float = 0.5
 ) -> void:
 	"""Handle generic damage effects including camera shake, blood, and sounds"""
-	# Camera shake when character takes damage
+	# Camera shake when character takes damage - use optimized pattern selection
 	var camera := character.get_viewport().get_camera_2d()
 	if camera:
 		var shake_intensity = camera_shake_intensity if current_hp > 0 else fatal_shake_intensity
 		var shake_duration = camera_shake_duration if current_hp > 0 else fatal_shake_duration
-		CameraUtils.camera_shake(camera, shake_intensity, shake_duration)
+		var pattern = CameraUtils.get_optimal_pattern(shake_intensity)
+		CameraUtils.camera_shake_pattern(camera, pattern, shake_intensity, shake_duration)
 	
 	# Create blood splash effect
 	if attacker_position != Vector2.ZERO:
@@ -180,7 +181,11 @@ static func apply_knockback(
 		var knockback_direction = (character.global_position - attacker_position).normalized()
 		if character.has_method("set"):
 			character.velocity.x = knockback_direction.x * force
-			character.velocity.y = knockback_direction.y * force * 0.5 - abs(force) * upward_force_multiplier
+			character.velocity.y = 0
+	
+	# Set knockback state if the character has this property
+	if character.has_method("set") and "is_being_knocked_back" in character:
+		character.is_being_knocked_back = true
 
 static func play_damage_audio(
 	character: Node2D,

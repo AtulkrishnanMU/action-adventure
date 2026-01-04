@@ -1,5 +1,13 @@
 extends CharacterBody2D
+# Core frequently accessed nodes - cached for performance
 @onready var animated_sprite_2d: AnimatedSprite2D = $AnimatedSprite2D
+@onready var hitbox: Area2D = $Hitbox
+@onready var hitbox_collision_shape: CollisionShape2D = $Hitbox/CollisionShape2D
+@onready var hurtbox: Area2D = $Hurtbox
+@onready var left_wall_detector: RayCast2D = $LeftWallDetector
+@onready var right_wall_detector: RayCast2D = $RightWallDetector
+
+# Audio nodes - properly cached with @onready for performance
 @onready var walk: AudioStreamPlayer2D = $walk
 @onready var jump: AudioStreamPlayer2D = $jump
 @onready var landing: AudioStreamPlayer2D = $landing
@@ -7,20 +15,42 @@ extends CharacterBody2D
 @onready var hit: AudioStreamPlayer2D = $Hit
 @onready var hurt: AudioStreamPlayer2D = $Hurt
 @onready var death: AudioStreamPlayer2D = $Death
-@onready var dust_particles: GPUParticles2D = $DustParticles
-@onready var landing_dust_particles_right: GPUParticles2D = $LandingDustParticles
-@onready var landing_dust_particles_left: GPUParticles2D = $LandingDustParticlesLeft
-@onready var hitbox: Area2D = $Hitbox
-@onready var hitbox_collision_shape: CollisionShape2D = $Hitbox/CollisionShape2D
-@onready var hitbox_timer: Timer = $HitboxTimer
-@onready var player_area: Area2D = $PlayerArea
-@onready var hurtbox: Area2D = $Hurtbox
-@onready var left_wall_detector: RayCast2D = $LeftWallDetector
-@onready var right_wall_detector: RayCast2D = $RightWallDetector
+@onready var dash_attack: AudioStreamPlayer2D = $DashAttack
+
+# Lazy-loaded particle nodes - cached when first accessed for performance
+var dust_particles: GPUParticles2D
+var landing_dust_particles_right: GPUParticles2D
+var landing_dust_particles_left: GPUParticles2D
+var hitbox_timer: Timer
+var player_area: Area2D
 var dash_trail_sprite: Sprite2D
+
+# Performance optimization: cache frequently used positions and calculations
+var cached_jump_dust_position: Vector2 = Vector2(-1.4800978, 5.9203925)
+var cached_wall_contact_point: Vector2 = Vector2.ZERO
+var wall_contact_update_timer: float = 0.0
+const WALL_CONTACT_UPDATE_INTERVAL: float = 0.05  # Update wall contact 20 times per second
+
+# Audio performance optimizations
+var walk_audio_timer: float = 0.0
+const WALK_AUDIO_CHECK_INTERVAL: float = 0.1  # Check walk audio 10 times per second
+var cached_walk_pitch: float = 1.0
+var walk_pitch_update_timer: float = 0.0
+const WALK_PITCH_UPDATE_INTERVAL: float = 0.2  # Update walk pitch 5 times per second
+
+# Pre-cached random pitch values for performance
+var cached_random_pitches: Array[float] = []
+const CACHED_PITCH_COUNT: int = 10
+var pitch_cache_index: int = 0
 var dash_trails: Array[Sprite2D] = []  # Store multiple trail sprites
 var hitbox_offset_x: float
 var original_hitbox_position: Vector2
+
+# Dash trail pooling system
+var trail_pool: Array[Sprite2D] = []  # Pool of reusable trail sprites
+var max_pool_size: int = 20  # Maximum number of trails to keep in pool
+var max_active_trails: int = 6  # Reduced from 10 for better performance
+var pool_parent: Node2D  # Parent node for pooled trails
 
 const AudioUtils = preload("res://scripts/utils/audio_utils.gd")
 const ParticlesUtil = preload("res://scripts/utils/particles_util.gd")
@@ -89,14 +119,58 @@ var dash_timer: float = 0.0
 var dash_cooldown_timer: float = 0.0
 var dash_direction := Vector2.ZERO
 var dash_trail_timer: float = 0.0
-@export var dash_trail_start_interval: float = 0.01  # Start with large interval
-@export var dash_trail_end_interval: float = 0.005  # End with near-zero interval
+var trail_creation_timer: float = 0.0  # Additional timer for performance optimization
+
+# Particle optimization variables
+var cached_contact_points: Array = []
+var contact_update_timer: float = 0.0
+@export var contact_update_interval: float = 0.05  # Update contact points 20 times per second max (optimized from 0.1)
+@export var dash_trail_start_interval: float = 0.02  # Reduced from 0.01 for better performance
+@export var dash_trail_end_interval: float = 0.01   # Reduced from 0.005 for better performance
+@export var min_trail_creation_interval: float = 0.015  # Minimum time between trail creations
 
 @export var hitbox_duration: float = 0.1  # Duration in seconds for hitbox to be active
 @export var dash_damage_multiplier: float = 2.0  # Damage multiplier during dash
 
+func _exit_tree() -> void:
+	# Clean up trail pool when player is removed
+	if pool_parent:
+		pool_parent.queue_free()
+	# Clean up any active trails
+	for trail in dash_trails:
+		if is_instance_valid(trail):
+			trail.queue_free()
+	dash_trails.clear()
+	trail_pool.clear()
+
 func is_player() -> bool:
 	return true
+
+# Lazy initialization helper methods
+func _get_dust_particles() -> GPUParticles2D:
+	if not dust_particles:
+		dust_particles = $DustParticles
+	return dust_particles
+
+func _get_landing_dust_particles_right() -> GPUParticles2D:
+	if not landing_dust_particles_right:
+		landing_dust_particles_right = $LandingDustParticles
+	return landing_dust_particles_right
+
+func _get_landing_dust_particles_left() -> GPUParticles2D:
+	if not landing_dust_particles_left:
+		landing_dust_particles_left = $LandingDustParticlesLeft
+	return landing_dust_particles_left
+
+func _get_hitbox_timer() -> Timer:
+	if not hitbox_timer:
+		hitbox_timer = $HitboxTimer
+	return hitbox_timer
+
+func _get_player_area() -> Area2D:
+	if not player_area:
+		player_area = $PlayerArea
+	return player_area
 
 func take_damage(amount: int, attacker_position: Vector2 = Vector2.ZERO) -> void:
 	if is_dead:
@@ -135,7 +209,7 @@ func take_damage(amount: int, attacker_position: Vector2 = Vector2.ZERO) -> void
 	
 	# Play hurt sound
 	if hurt:
-		AudioUtils.play_with_random_pitch(hurt, 0.9, 1.1)
+		_play_audio_optimized(hurt, 0.9, 1.1)
 	
 	# Check if player died
 	if current_hp <= 0:
@@ -146,15 +220,24 @@ func _ready():
 	collision_layer = 2  # Layer 2
 	collision_mask = 1   # Only check layer 1 (ground)
 	add_to_group("player")  # Add to player group for enemy detection
-	default_dust_amount = dust_particles.amount
-	default_landing_right_amount = landing_dust_particles_right.amount
-	default_landing_left_amount = landing_dust_particles_left.amount
-	ParticlesUtil.init_particles(dust_particles, landing_dust_particles_right, landing_dust_particles_left)
+	
+	# Initialize particle systems lazily
+	var dust = _get_dust_particles()
+	var landing_right = _get_landing_dust_particles_right()
+	var landing_left = _get_landing_dust_particles_left()
+	default_dust_amount = dust.amount
+	default_landing_right_amount = landing_right.amount
+	default_landing_left_amount = landing_left.amount
+	ParticlesUtil.init_particles(dust, landing_right, landing_left)
+	
 	original_hitbox_position = hitbox.position
 	hitbox_offset_x = original_hitbox_position.x
 	hitbox_collision_shape.disabled = true
-	hitbox_timer.one_shot = true
-	hitbox_timer.timeout.connect(_on_hitbox_timer_timeout)
+	
+	# Initialize hitbox timer lazily
+	var timer = _get_hitbox_timer()
+	timer.one_shot = true
+	timer.timeout.connect(_on_hitbox_timer_timeout)
 	
 	# Connect hurtbox signal
 	if hurtbox:
@@ -169,21 +252,108 @@ func _ready():
 	# Set up dash trail
 	_setup_dash_trail()
 	
+	# Initialize dash trail pool
+	_setup_trail_pool()
+	
 	# Set dust particles to render below player
 	_setup_dust_layers()
+	
+	# Initialize audio performance optimizations
+	_initialize_audio_cache()
 	
 	# Player area initialization
 
 func _setup_dust_layers() -> void:
 	# Set dust particles to render below player using z-index
-	dust_particles.z_index = -1
-	landing_dust_particles_left.z_index = -1
-	landing_dust_particles_right.z_index = -1
+	var dust = _get_dust_particles()
+	var landing_left = _get_landing_dust_particles_left()
+	var landing_right = _get_landing_dust_particles_right()
+	dust.z_index = -1
+	landing_left.z_index = -1
+	landing_right.z_index = -1
 	
 	# Alternative: Use rendering layers if needed
 	# dust_particles.render_layer = 1
 	# landing_dust_particles_left.render_layer = 1
 	# landing_dust_particles_right.render_layer = 1
+
+func _initialize_audio_cache() -> void:
+	"""Initialize pre-cached random pitch values for performance"""
+	cached_random_pitches.clear()
+	for i in range(CACHED_PITCH_COUNT):
+		cached_random_pitches.append(randf_range(0.8, 1.2))
+	pitch_cache_index = 0
+
+func _play_audio_optimized(audio_player: AudioStreamPlayer2D, min_pitch: float = 0.9, max_pitch: float = 1.1) -> void:
+	"""Optimized audio playing with cached pitch values"""
+	if not audio_player:
+		return
+	
+	# Use cached pitch value and cycle through cache
+	audio_player.pitch_scale = cached_random_pitches[pitch_cache_index]
+	pitch_cache_index = (pitch_cache_index + 1) % CACHED_PITCH_COUNT
+	audio_player.play()
+
+func _setup_trail_pool() -> void:
+	# Defer the entire pool setup to avoid scene tree blocking issues
+	_setup_pool_deferred.call_deferred()
+
+func _setup_pool_deferred() -> void:
+	# Create a parent node for pooled trails to keep scene organized
+	pool_parent = Node2D.new()  # Use Node2D to support visibility
+	pool_parent.name = "DashTrailPool"
+	get_tree().current_scene.add_child(pool_parent)
+	pool_parent.visible = false  # Hide pooled trails by default
+
+func _get_pooled_trail() -> Sprite2D:
+	# Ensure pool parent is ready before using
+	if not pool_parent or not pool_parent.is_inside_tree():
+		return _create_new_trail_sprite()
+		
+	# Get a trail from pool or create new one if pool is empty
+	if trail_pool.size() > 0:
+		var trail = trail_pool.pop_back()
+		if trail.get_parent():
+			trail.get_parent().remove_child(trail)
+		return trail
+	else:
+		# Create new trail if pool is empty
+		return _create_new_trail_sprite()
+
+func _create_new_trail_sprite() -> Sprite2D:
+	var trail = Sprite2D.new()
+	
+	# Apply shader material
+	var shader_material = ShaderMaterial.new()
+	shader_material.shader = load("res://shaders/dash_trail.gdshader")
+	trail.material = shader_material
+	trail.z_index = -1  # Behind main sprite
+	
+	return trail
+
+func _return_trail_to_pool(trail: Sprite2D) -> void:
+	# Ensure pool parent is ready before using
+	if not pool_parent or not pool_parent.is_inside_tree():
+		# Pool not ready, just destroy the trail
+		trail.queue_free()
+		return
+		
+	# Return trail to pool if not at max capacity
+	if trail_pool.size() < max_pool_size:
+		# Reset trail properties
+		trail.visible = false
+		trail.modulate = Color.WHITE
+		if trail.material and trail.material is ShaderMaterial:
+			trail.material.set_shader_parameter("fade_alpha", 1.0)
+		
+		# Remove from current parent and add to pool
+		if trail.get_parent():
+			trail.get_parent().remove_child(trail)
+		pool_parent.add_child(trail)
+		trail_pool.append(trail)
+	else:
+		# Destroy trail if pool is full
+		trail.queue_free()
 
 func _setup_dash_trail() -> void:
 	# Create main trail sprite for copying
@@ -206,9 +376,17 @@ func _create_dash_trail() -> void:
 	if not dash_trail_sprite:
 		return
 		
-	# Create a new trail sprite for this instance
-	var trail_instance = Sprite2D.new()
-	get_tree().current_scene.add_child(trail_instance)  # Add to scene root, not player
+	# Limit the number of active trails to prevent performance issues
+	if dash_trails.size() >= max_active_trails:
+		# Remove the oldest trail to make room
+		var oldest_trail = dash_trails[0]
+		if is_instance_valid(oldest_trail):
+			_return_trail_to_pool(oldest_trail)
+		dash_trails.erase(oldest_trail)
+		
+	# Get trail from pool instead of creating new instance
+	var trail_instance = _get_pooled_trail()
+	get_tree().current_scene.add_child(trail_instance)  # Add to scene root
 	dash_trails.append(trail_instance)
 	
 	# Update trail sprite to match current animation frame
@@ -227,19 +405,20 @@ func _create_dash_trail() -> void:
 	trail_instance.modulate = Color.WHITE
 	trail_instance.z_index = -1  # Behind main sprite
 	
-	# Apply shader material
-	var shader_material = ShaderMaterial.new()
-	shader_material.shader = load("res://shaders/dash_trail.gdshader")
-	shader_material.set_shader_parameter("fade_alpha", 1.0)  # Start at full opacity
-	trail_instance.material = shader_material
+	# Reset shader material and set initial fade alpha
+	if trail_instance.material and trail_instance.material is ShaderMaterial:
+		trail_instance.material.set_shader_parameter("fade_alpha", 1.0)  # Start at full opacity
 	
 	# Make trail visible and fade out from full opacity
 	trail_instance.visible = true
 	var tween = create_tween()
 	tween.set_parallel(true)
-	tween.tween_method(func(alpha): shader_material.set_shader_parameter("fade_alpha", alpha), 1.0, 0.0, 0.5)  # Fade out over 0.5 seconds
+	tween.tween_method(func(alpha): 
+		if trail_instance.material and trail_instance.material is ShaderMaterial:
+			trail_instance.material.set_shader_parameter("fade_alpha", alpha)
+	, 1.0, 0.0, 0.5)  # Fade out over 0.5 seconds
 	tween.tween_callback(func(): 
-		trail_instance.queue_free()
+		_return_trail_to_pool(trail_instance)  # Return to pool instead of queue_free
 		dash_trails.erase(trail_instance)
 	).set_delay(0.5)
 
@@ -339,34 +518,56 @@ func _physics_process(delta: float) -> void:
 	if is_dead:
 		return
 		
+	# Update cached contact points less frequently for performance
+	contact_update_timer += delta
+	if contact_update_timer >= contact_update_interval:
+		cached_contact_points = _get_floor_contact_points()
+		contact_update_timer = 0.0
+	
+	# Update wall contact point less frequently
+	wall_contact_update_timer += delta
+	if wall_contact_update_timer >= WALL_CONTACT_UPDATE_INTERVAL:
+		cached_wall_contact_point = _get_wall_contact_point()
+		wall_contact_update_timer = 0.0
+	
+	# Update audio timers for performance optimization
+	walk_audio_timer += delta
+	walk_pitch_update_timer += delta
+		
+	# Performance optimization: cache frequently used calculations
 	var on_floor := is_on_floor()
 	var direction := Input.get_axis("ui_left", "ui_right")
+	var moving_right: bool = direction > 0
+	var moving_left: bool = direction < 0
+	var is_moving_horizontally := direction != 0
+	var is_on_wall_now := is_on_wall_custom()  # Cache wall detection
 
 	# LANDING DETECTION
 	if CharacterUtils.is_landing(on_floor, was_on_floor):
-		AudioUtils.play_with_random_pitch(landing, 0.9, 1.1)
+		_play_audio_optimized(landing, 0.9, 1.1)
 		jump_count = 0  # Reset jump count when landing
 		is_jumping = false  # Reset jumping state when landing
 		
 		_play_land_squash()
 		
-		# Create dust burst on landing at contact points
-		var contact_points = _get_floor_contact_points()
-		if contact_points.size() > 0:
+		# Create dust burst on landing at cached contact points
+		if cached_contact_points.size() > 0:
 			# Position landing dust particles at contact points
-			if contact_points.size() >= 1:
-				landing_dust_particles_left.global_position = contact_points[0]
-				landing_dust_particles_left.restart()
-				landing_dust_particles_left.emitting = true
-			if contact_points.size() >= 2:
-				landing_dust_particles_right.global_position = contact_points[1]
-				landing_dust_particles_right.restart()
-				landing_dust_particles_right.emitting = true
+			var landing_left = _get_landing_dust_particles_left()
+			var landing_right = _get_landing_dust_particles_right()
+			if cached_contact_points.size() >= 1:
+				landing_left.global_position = cached_contact_points[0]
+				landing_left.restart()
+				landing_left.emitting = true
+			if cached_contact_points.size() >= 2:
+				landing_right.global_position = cached_contact_points[1]
+				landing_right.restart()
+				landing_right.emitting = true
 		else:
 			# Fallback to original logic if no contact points detected
 			ParticlesUtil.trigger_landing_burst(
-				landing_dust_particles_right,
-				landing_dust_particles_left,
+				_get_landing_dust_particles_right(),
+				_get_landing_dust_particles_left(),
 				abs(velocity.x),
 				attack_speed,
 				default_landing_right_amount,
@@ -375,9 +576,6 @@ func _physics_process(delta: float) -> void:
 
 	was_on_floor = on_floor
 	
-	var moving_right: bool = CharacterUtils.is_moving_right(velocity.x)
-	var moving_left: bool = CharacterUtils.is_moving_left(velocity.x)
-	var is_moving_horizontally := CharacterUtils.is_moving_horizontally(velocity.x)
 	
 	# Update jump dust timer
 	jump_dust_timer = ParticlesUtil.update_jump_dust_timer(jump_dust_timer, delta)
@@ -385,26 +583,27 @@ func _physics_process(delta: float) -> void:
 	var should_emit := (is_moving_horizontally and on_floor) or (jump_dust_timer > 0.0)
 	if should_emit:
 		if jump_dust_timer > 0.0:
-			# Use player center for jump dust (collision shape position)
-			dust_particles.position = Vector2(-1.4800978, 5.9203925)
-			dust_particles.emitting = true
+			# Use player center for jump dust (collision shape position) - use cached position
+			var dust = _get_dust_particles()
+			dust.position = cached_jump_dust_position
+			dust.emitting = true
 		else:
-			# Use floor contact points for movement dust
-			var contact_points = _get_floor_contact_points()
-			if contact_points.size() > 0:
-				for point in contact_points:
-					dust_particles.global_position = point
+			# Use cached floor contact points for movement dust
+			if cached_contact_points.size() > 0:
+				for point in cached_contact_points:
+					var dust = _get_dust_particles()
+					dust.global_position = point
 					var target_amount := ParticlesUtil._scaled_amount(abs(velocity.x), speed, default_dust_amount)
-					if not dust_particles.emitting:
-						dust_particles.amount = target_amount
+					if not dust.emitting:
+						dust.amount = target_amount
 					else:
-						if target_amount > dust_particles.amount:
-							dust_particles.amount = target_amount
-					dust_particles.emitting = true
+						if target_amount > dust.amount:
+							dust.amount = target_amount
+					dust.emitting = true
 			else:
 				# Fallback to original logic
 				ParticlesUtil.update_continuous_dust(
-					dust_particles,
+					_get_dust_particles(),
 					is_moving_horizontally,
 					on_floor,
 					jump_dust_timer,
@@ -414,11 +613,12 @@ func _physics_process(delta: float) -> void:
 				)
 	else:
 		# Stop dust emission if not moving on floor and not jumping and not wall sliding
-		if dust_particles.emitting and not is_on_wall_custom():
-			dust_particles.emitting = false
+		var dust = _get_dust_particles()
+		if dust.emitting and not is_on_wall_custom():
+			dust.emitting = false
 	
 	if Input.is_action_just_pressed("attack") and not is_attacking and not is_rolling:
-		AudioUtils.play_with_random_pitch(slash, 0.9, 1.1)
+		_play_audio_optimized(slash, 0.9, 1.1)
 		if attack_alternate:
 			animated_sprite_2d.animation = "attack2"
 		else:
@@ -429,7 +629,8 @@ func _physics_process(delta: float) -> void:
 		knockback_direction = -1.0 if animated_sprite_2d.flip_h else 1.0
 		knockback_velocity = attack_knockback
 		hitbox_collision_shape.disabled = false
-		hitbox_timer.start(hitbox_duration)  # Start timer to disable hitbox after specified duration
+		var timer = _get_hitbox_timer()
+		timer.start(hitbox_duration)  # Start timer to disable hitbox after specified duration
 	
 	# Dash input handling
 	if Input.is_action_just_pressed("dash") and not is_dashing and dash_cooldown_timer <= 0 and not is_rolling and not is_attacking:
@@ -502,20 +703,29 @@ func _physics_process(delta: float) -> void:
 		if current_direction == 0 or is_on_floor():  # Player released direction OR landed on floor
 			wall_jump_direction_locked = false
 	
-	# Handle running animation and sound (only on ground)
-	if not is_attacking and not is_rolling and not is_wall_jumping:
-		if (moving_right or moving_left) and is_on_floor():
+	# Handle running animation and sound (only on ground) - use cached direction and audio optimization
+	if not is_attacking and not is_rolling and not is_wall_jumping and not is_dashing:
+		if is_moving_horizontally and on_floor:
 			animated_sprite_2d.animation = "run"
-			if not walk.playing:
-				walk.pitch_scale = randf_range(0.9, 1.1)
-				walk.play()
+			# Optimized walking audio with reduced frequency checks
+			if walk_audio_timer >= WALK_AUDIO_CHECK_INTERVAL:
+				walk_audio_timer = 0.0
+				if not walk.playing:
+					# Update cached pitch less frequently using pre-cached values
+					if walk_pitch_update_timer >= WALK_PITCH_UPDATE_INTERVAL:
+						walk_pitch_update_timer = 0.0
+						cached_walk_pitch = cached_random_pitches[pitch_cache_index]
+						pitch_cache_index = (pitch_cache_index + 1) % CACHED_PITCH_COUNT
+					walk.pitch_scale = cached_walk_pitch
+					walk.play()
 		else:
 			animated_sprite_2d.animation = "idle"
+			# Stop walking audio when not moving (check less frequently)
+			if walk_audio_timer >= WALK_AUDIO_CHECK_INTERVAL and walk.playing:
+				walk.stop()
 	
 	if not is_on_floor():
-		if not is_attacking and not is_rolling and not is_wall_jumping:
-			# Check if player is wall sliding
-			var is_on_wall_now = is_on_wall_custom()
+		if not is_attacking and not is_rolling and not is_wall_jumping and not is_dashing:
 			if is_on_wall_now and velocity.y > 0:  # Only when falling, not jumping up
 				animated_sprite_2d.animation = "wall_slide"
 				# Face away from wall when sliding
@@ -526,8 +736,8 @@ func _physics_process(delta: float) -> void:
 			else:
 				animated_sprite_2d.animation = "jump"
 	velocity = CharacterUtils.apply_gravity(velocity, get_gravity(), delta, fall_gravity_multiplier)
-	# Apply wall sliding using custom raycast detection with hysteresis
-	var is_on_wall_now = is_on_wall_custom()
+
+	# Apply wall sliding using cached wall detection
 	
 	# Handle wall sliding without hysteresis
 	if is_on_wall_now:
@@ -539,16 +749,17 @@ func _physics_process(delta: float) -> void:
 		# Gradually reduce downward velocity to wall slide speed
 		velocity.y = wall_slide_speed
 		
-		# Emit continuous wall sliding dust at contact point
-		var wall_contact = _get_wall_contact_point()
-		if wall_contact != Vector2.ZERO:
-			dust_particles.global_position = wall_contact
-			dust_particles.amount = wall_slide_dust_amount
-			dust_particles.emitting = true
+		# Emit continuous wall sliding dust at cached contact point
+		if cached_wall_contact_point != Vector2.ZERO:
+			var dust = _get_dust_particles()
+			dust.global_position = cached_wall_contact_point
+			dust.amount = wall_slide_dust_amount
+			dust.emitting = true
 	else:
 		# Stop wall dust when not actively sliding down wall
-		if dust_particles.emitting and not ((is_moving_horizontally and on_floor) or jump_dust_timer > 0.0):
-			dust_particles.emitting = false
+		var dust = _get_dust_particles()
+		if dust.emitting and not ((is_moving_horizontally and on_floor) or jump_dust_timer > 0.0):
+			dust.emitting = false
 
 	if Input.is_action_just_pressed("ui_accept") and jump_count < max_jumps and not is_rolling:
 		# Check if player was wall-sliding before jump
@@ -557,11 +768,12 @@ func _physics_process(delta: float) -> void:
 		velocity.y = jump_velocity
 		jump_count += 1
 		is_jumping = true  # Start jumping state
-		AudioUtils.play_with_random_pitch(jump, 0.9, 1.1)
-		# Start dust trail for jump at player center (using collision shape position)
+		_play_audio_optimized(jump, 0.9, 1.1)
+		# Start dust trail for jump at player center (using cached position)
 		jump_dust_timer = jump_dust_duration
-		dust_particles.position = Vector2(-1.4800978, 5.9203925)
-		dust_particles.emitting = true
+		var dust = _get_dust_particles()
+		dust.position = cached_jump_dust_position
+		dust.emitting = true
 		
 		_play_jump_squash()
 		
@@ -620,9 +832,8 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 
 func play_hit_sound() -> void:
-	"""Play hit sound with random pitch variation"""
-	if hit:
-		AudioUtils.play_with_random_pitch(hit, 0.9, 1.1)
+	"""Play hit sound with optimized cached pitch variation"""
+	_play_audio_optimized(hit, 0.9, 1.1)
 
 func _update_ui_health() -> void:
 	"""Update the UI health bar with current health values"""
@@ -636,7 +847,7 @@ func _handle_player_death() -> void:
 	
 	# Play death sound
 	if death:
-		AudioUtils.play_with_random_pitch(death, 0.8, 1.2)
+		_play_audio_optimized(death, 0.8, 1.2)
 	
 	# Apply death knockback using player's own system (same as small enemy's fatal knockback)
 	# Use a position behind the player for dramatic backward knockback
@@ -699,6 +910,9 @@ func _on_hurtbox_area_entered(area: Area2D) -> void:
 		take_damage(10, enemy_position)
 
 func _start_dash() -> void:
+	# Play dash attack sound
+	_play_audio_optimized(dash_attack, 0.9, 1.1)
+	
 	# Get dash direction from input or facing direction
 	var input_dir = Vector2(
 		Input.get_axis("ui_left", "ui_right"),
@@ -716,10 +930,17 @@ func _start_dash() -> void:
 	dash_timer = dash_duration
 	dash_cooldown_timer = dash_cooldown
 	dash_trail_timer = 0.0  # Reset trail timer
+	trail_creation_timer = 0.0  # Reset trail creation timer
+	
+	# Play random attack animation for dash
+	var attack_animations = ["attack1", "attack2"]
+	var random_attack = attack_animations[randi() % attack_animations.size()]
+	animated_sprite_2d.animation = random_attack
 	
 	# Enable hitbox during dash
 	hitbox_collision_shape.disabled = false
-	hitbox_timer.start(dash_duration)  # Disable hitbox after dash ends
+	var timer = _get_hitbox_timer()
+	timer.start(dash_duration)  # Disable hitbox after dash ends
 	
 	# Set dash damage flag
 	set_meta("is_dashing", true)
@@ -729,10 +950,11 @@ func _start_dash() -> void:
 	knockback_direction = 1.0 if dash_direction.x > 0 else -1.0
 	knockback_velocity = attack_knockback * 1.5  # Stronger knockback for dash
 	
-	# Create dash dust effect
-	dust_particles.position = Vector2(-1.4800978, 5.9203925)
-	dust_particles.amount = 15
-	dust_particles.emitting = true
+	# Create dash dust effect - use cached position
+	var dust = _get_dust_particles()
+	dust.position = cached_jump_dust_position
+	dust.amount = 12  # Reduced from 15 for performance
+	dust.emitting = true
 	
 	# Create initial dash trail
 	_create_dash_trail()
@@ -747,6 +969,7 @@ func _get_current_trail_interval() -> float:
 func _update_dash(delta: float) -> void:
 	dash_timer -= delta
 	dash_trail_timer -= delta
+	trail_creation_timer += delta  # Update trail creation timer
 	
 	if dash_timer <= 0.0:
 		# End dash
@@ -756,12 +979,15 @@ func _update_dash(delta: float) -> void:
 		# Clear dash damage flag
 		set_meta("is_dashing", false)
 		remove_meta("dash_damage_multiplier")
+		# Reset animation to idle after dash
+		animated_sprite_2d.animation = "idle"
 		return
 	
-	# Create trail effect at variable intervals
-	if dash_trail_timer <= 0.0:
+	# Optimized trail creation with minimum interval enforcement
+	if dash_trail_timer <= 0.0 and trail_creation_timer >= min_trail_creation_interval:
 		_create_dash_trail()
 		dash_trail_timer = _get_current_trail_interval()
+		trail_creation_timer = 0.0  # Reset creation timer after creating trail
 	
 	# Calculate dash speed to cover distance in duration
 	var dash_speed = dash_distance / dash_duration

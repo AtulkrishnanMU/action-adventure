@@ -1,5 +1,11 @@
 extends Node2D
 
+const AudioUtils = preload("res://scripts/utils/audio_utils.gd")
+const RNGUtils = preload("res://scripts/utils/rng_utils.gd")
+
+# Audio player for grass cut sound
+@onready var grass_cut_sound: AudioStreamPlayer2D = $GrassCut
+
 @onready var grass_blade1 = $GrassBlade1
 @onready var grass_blade2 = $GrassBlade2
 @onready var area_2d = $Area2D
@@ -82,7 +88,28 @@ func _on_area_entered(area):
 
 func _on_hurtbox_area_entered(area):
 	if area.is_in_group("player_hitbox"):
+		# Play grass cut sound with random pitch
+		if grass_cut_sound:
+			# Create a new AudioStreamPlayer2D at runtime
+			var sound_player = AudioStreamPlayer2D.new()
+			sound_player.stream = grass_cut_sound.stream
+			sound_player.volume_db = 0.0  # Ensure volume is not too low
+			add_child(sound_player)
+			
+			# Connect signal to clean up after playing
+			sound_player.finished.connect(
+				func():
+					sound_player.queue_free()
+			)
+			
+			# Play with random pitch
+			sound_player.pitch_scale = randf_range(0.9, 1.1)
+			sound_player.play()
+		
+		# Spawn cut grass and free
 		_spawn_cut_grass_blades()
+		# Give a small delay before freeing to ensure sound starts playing
+		await get_tree().create_timer(0.1).timeout
 		queue_free()
 
 func _spawn_cut_grass_blades() -> void:
@@ -90,34 +117,31 @@ func _spawn_cut_grass_blades() -> void:
 	if parent == null:
 		return
 
-	var rng := RandomNumberGenerator.new()
-	rng.randomize()
-
 	var burst := Node2D.new()
 	burst.global_position = global_position
 	parent.add_child(burst)
 
-	var count := rng.randi_range(5, 11)
+	var count := RNGUtils.randi_range(5, 11)
 	for i in count:
 		var blade := Sprite2D.new()
 		blade.texture = CUT_GRASS_BLADE_TEXTURE
-		blade.rotation = rng.randf_range(-0.7, 0.7)
-		blade.scale = Vector2.ONE * rng.randf_range(0.8, 1.15)
-		blade.position = Vector2(rng.randf_range(-12.0, 12.0), rng.randf_range(-8.0, 8.0))
+		blade.rotation = RNGUtils.randf_range(-0.7, 0.7)
+		blade.scale = Vector2.ONE * RNGUtils.randf_range(0.8, 1.15)
+		blade.position = Vector2(RNGUtils.randf_range(-12.0, 12.0), RNGUtils.randf_range(-8.0, 8.0))
 		blade.z_index = -1
 		burst.add_child(blade)
 
 		var start_pos := blade.position
-		var rise := rng.randf_range(8.0, 16.0)  # Reduced upward movement
-		var drift_x := rng.randf_range(-15.0, 15.0)  # Reduced horizontal drift
-		var up_time := rng.randf_range(0.1, 0.2)  # Faster upward movement
-		var down_time := rng.randf_range(0.4, 0.7)  # Longer fall time
-		var fall_height := rng.randf_range(60.0, 120.0)  # Increased fall distance
+		var rise := RNGUtils.randf_range(8.0, 16.0)  # Reduced upward movement
+		var drift_x := RNGUtils.randf_range(-15.0, 15.0)  # Reduced horizontal drift
+		var up_time := RNGUtils.randf_range(0.1, 0.2)  # Faster upward movement
+		var down_time := RNGUtils.randf_range(0.4, 0.7)  # Longer fall time
+		var fall_height := RNGUtils.randf_range(60.0, 120.0)  # Increased fall distance
 
 		var t := blade.create_tween()
 		t.tween_property(blade, "position", start_pos + Vector2(drift_x * 0.5, -rise), up_time).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 		t.tween_property(blade, "position", start_pos + Vector2(drift_x * 0.8, fall_height), down_time).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-		t.parallel().tween_property(blade, "rotation", blade.rotation + rng.randf_range(-4.0, 4.0), up_time + down_time)
+		t.parallel().tween_property(blade, "rotation", blade.rotation + RNGUtils.randf_range(-4.0, 4.0), up_time + down_time)
 		t.parallel().tween_property(blade, "modulate:a", 0.0, maxf(0.15, down_time - 0.1))
 		t.tween_callback(blade.queue_free)
 

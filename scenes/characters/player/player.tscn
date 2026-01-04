@@ -1,4 +1,4 @@
-[gd_scene load_steps=73 format=3 uid="uid://b5xhiwa1iy42"]
+[gd_scene load_steps=74 format=3 uid="uid://b5xhiwa1iy42"]
 
 [ext_resource type="Script" uid="uid://fbqmytkglb1t" path="res://scenes/characters/player/player.gd" id="1_6avc5"]
 [ext_resource type="AudioStream" uid="uid://dchro2t67htf4" path="res://sounds/landing.mp3" id="2_42irl"]
@@ -17,6 +17,7 @@
 [ext_resource type="AudioStream" uid="uid://lkkxnhrvmrgl" path="res://sounds/hit.mp3" id="14_hv5x3"]
 [ext_resource type="AudioStream" uid="uid://m1xbggirxheh" path="res://sounds/small_enemy/small_enemy_hurt/hurt3.mp3" id="14_i1nod"]
 [ext_resource type="AudioStream" uid="uid://c2ff3ruq7yhl4" path="res://sounds/small_enemy/small_enemy_hurt/hurt.mp3" id="15_4kqyw"]
+[ext_resource type="AudioStream" uid="uid://dr1fxrmfmtqns" path="res://sounds/dash-attack.mp3" id="18_svuau"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_djydg"]
 atlas = ExtResource("6_xuses")
@@ -482,7 +483,7 @@ scale = Vector2(0.4661355, 0.4661355)
 sprite_frames = SubResource("SpriteFrames_sulyr")
 animation = &"fall"
 autoplay = "idle"
-frame_progress = 0.31477198
+frame_progress = 0.0025377888
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(-1.4800978, 5.9203925)
@@ -552,6 +553,7 @@ shape = SubResource("RectangleShape2D_6avc5")
 position = Vector2(-8.880592, -173.17146)
 scale = Vector2(0.46613553, 0.46613553)
 position_smoothing_enabled = true
+position_smoothing_speed = 30.0
 
 [node name="Death" type="AudioStreamPlayer2D" parent="."]
 scale = Vector2(1.0000001, 1.0000001)
@@ -563,6 +565,10 @@ stream = ExtResource("15_4kqyw")
 
 [node name="Hit" type="AudioStreamPlayer2D" parent="."]
 stream = ExtResource("14_hv5x3")
+
+[node name="DashAttack" type="AudioStreamPlayer2D" parent="."]
+scale = Vector2(1.0000001, 1.0000001)
+stream = ExtResource("18_svuau")
 
 [node name="LeftWallDetector" type="RayCast2D" parent="."]
 position = Vector2(-15, 0)

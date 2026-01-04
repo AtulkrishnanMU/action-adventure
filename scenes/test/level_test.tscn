@@ -3,13 +3,14 @@
 [ext_resource type="PackedScene" uid="uid://b5xhiwa1iy42" path="res://scenes/characters/player/player.tscn" id="1_10enl"]
 [ext_resource type="PackedScene" uid="uid://bvqx8y7n2kqrp" path="res://scenes/objects/grass/grass.tscn" id="4_kq4re"]
 [ext_resource type="PackedScene" uid="uid://bvxk8y7n2kqrp" path="res://scenes/objects/crate/crate.tscn" id="4_sogyd"]
-[ext_resource type="PackedScene" uid="uid://d2tr3qoeyvfpu" path="res://scenes/ui/ui.tscn" id="5_ju1jq"]
 [ext_resource type="PackedScene" uid="uid://s5s8rihc17h3" path="res://scenes/characters/small_enemy/small_enemy.tscn" id="5_sogyd"]
+[ext_resource type="Script" uid="uid://mi4uftwirg3w" path="res://scripts/levels/level_test.gd" id="6_level_script"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_kq4re"]
 size = Vector2(930.5, 138)
 
 [node name="LevelTest" type="Node2D"]
+script = ExtResource("6_level_script")
 
 [node name="Player" parent="." instance=ExtResource("1_10enl")]
 position = Vector2(437.99997, 292)
@@ -111,12 +112,10 @@ offset_bottom = 472.49268
 color = Color(0.27134386, 0.008001301, 1.2032688e-08, 1)
 
 [node name="SmallEnemy2" parent="." instance=ExtResource("5_sogyd")]
-position = Vector2(998, 289)
+position = Vector2(2190, 283)
 
 [node name="SmallEnemy3" parent="." instance=ExtResource("5_sogyd")]
-position = Vector2(932, 106)
+position = Vector2(1601, 280)
 
 [node name="SmallEnemy4" parent="." instance=ExtResource("5_sogyd")]
-position = Vector2(797, 297)
-
-[node name="UI" parent="." instance=ExtResource("5_ju1jq")]
+position = Vector2(2578, 282)
