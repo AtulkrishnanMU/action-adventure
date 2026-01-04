@@ -517,6 +517,9 @@ func _physics_process(delta: float) -> void:
 	# Don't process anything if dead
 	if is_dead:
 		return
+	
+	# Debug: Track animation state changes
+	var prev_animation = animated_sprite_2d.animation
 		
 	# Update cached contact points less frequently for performance
 	contact_update_timer += delta
@@ -618,11 +621,13 @@ func _physics_process(delta: float) -> void:
 			dust.emitting = false
 	
 	if Input.is_action_just_pressed("attack") and not is_attacking and not is_rolling:
+		print("[DEBUG] Attack initiated - is_on_floor: ", is_on_floor(), " is_on_wall: ", is_on_wall(), " current animation: ", animated_sprite_2d.animation)
 		_play_audio_optimized(slash, 0.9, 1.1)
 		if attack_alternate:
 			animated_sprite_2d.animation = "attack2"
 		else:
 			animated_sprite_2d.animation = "attack1"
+		print("[DEBUG] Attack animation set to: ", animated_sprite_2d.animation)
 		attack_alternate = not attack_alternate
 		is_attacking = true
 		# Set knockback direction and velocity
@@ -639,6 +644,7 @@ func _physics_process(delta: float) -> void:
 	# Check if attack animation has finished
 	if is_attacking and animated_sprite_2d.animation.begins_with("attack"):
 		if CharacterUtils.is_animation_last_frame(animated_sprite_2d):
+			print("[DEBUG] Attack animation finished - is_on_floor: ", is_on_floor(), " is_on_wall: ", is_on_wall(), " current animation: ", animated_sprite_2d.animation)
 			is_attacking = false
 	
 	# Roll logic - works whether horizontal or down is pressed first
@@ -706,6 +712,8 @@ func _physics_process(delta: float) -> void:
 	# Handle running animation and sound (only on ground) - use cached direction and audio optimization
 	if not is_attacking and not is_rolling and not is_wall_jumping and not is_dashing:
 		if is_moving_horizontally and on_floor:
+			if animated_sprite_2d.animation != "run":
+				print("[DEBUG] Setting run animation - is_on_floor: ", on_floor, " is_moving_horizontally: ", is_moving_horizontally)
 			animated_sprite_2d.animation = "run"
 			# Optimized walking audio with reduced frequency checks
 			if walk_audio_timer >= WALK_AUDIO_CHECK_INTERVAL:
@@ -719,6 +727,8 @@ func _physics_process(delta: float) -> void:
 					walk.pitch_scale = cached_walk_pitch
 					walk.play()
 		else:
+			if animated_sprite_2d.animation != "idle":
+				print("[DEBUG] Setting idle animation - is_on_floor: ", on_floor, " is_moving_horizontally: ", is_moving_horizontally, " previous animation: ", animated_sprite_2d.animation)
 			animated_sprite_2d.animation = "idle"
 			# Stop walking audio when not moving (check less frequently)
 			if walk_audio_timer >= WALK_AUDIO_CHECK_INTERVAL and walk.playing:
@@ -727,6 +737,8 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		if not is_attacking and not is_rolling and not is_wall_jumping and not is_dashing:
 			if is_on_wall_now and velocity.y > 0:  # Only when falling, not jumping up
+				if animated_sprite_2d.animation != "wall_slide":
+					print("[DEBUG] Setting wall_slide animation - is_attacking: ", is_attacking, " velocity.y: ", velocity.y)
 				animated_sprite_2d.animation = "wall_slide"
 				# Face away from wall when sliding
 				if left_wall_detector.is_colliding():
@@ -734,6 +746,8 @@ func _physics_process(delta: float) -> void:
 				elif right_wall_detector.is_colliding():
 					animated_sprite_2d.flip_h = true   # Face left when wall is on right
 			else:
+				if animated_sprite_2d.animation != "jump":
+					print("[DEBUG] Setting jump animation - is_attacking: ", is_attacking, " velocity.y: ", velocity.y, " is_on_wall: ", is_on_wall())
 				animated_sprite_2d.animation = "jump"
 	velocity = CharacterUtils.apply_gravity(velocity, get_gravity(), delta, fall_gravity_multiplier)
 
@@ -828,6 +842,10 @@ func _physics_process(delta: float) -> void:
 			velocity.x = move_toward(velocity.x, 0, speed)
 
 	CharacterUtils.update_hitbox_position_x(hitbox, original_hitbox_position, animated_sprite_2d.flip_h)
+
+	# Debug: Log animation changes
+	if prev_animation != animated_sprite_2d.animation:
+		print("[DEBUG] Animation changed from: ", prev_animation, " to: ", animated_sprite_2d.animation, " | is_attacking: ", is_attacking, " is_on_floor: ", is_on_floor(), " is_on_wall: ", is_on_wall())
 
 	move_and_slide()
 
