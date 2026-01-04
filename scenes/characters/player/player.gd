@@ -17,6 +17,8 @@ extends CharacterBody2D
 @onready var hurtbox: Area2D = $Hurtbox
 @onready var left_wall_detector: RayCast2D = $LeftWallDetector
 @onready var right_wall_detector: RayCast2D = $RightWallDetector
+var dash_trail_sprite: Sprite2D
+var dash_trails: Array[Sprite2D] = []  # Store multiple trail sprites
 var hitbox_offset_x: float
 var original_hitbox_position: Vector2
 
@@ -46,6 +48,12 @@ const CharacterUtils = preload("res://scripts/utils/character_utils.gd")
 @export var default_landing_right_amount: int = 0
 @export var default_landing_left_amount: int = 0
 @export var max_roll_duration: float = 1.0
+@export var wall_slide_dust_amount: int = 10  # Amount of dust for wall sliding
+
+# Dash Settings
+@export var dash_distance: float = 300.0
+@export var dash_duration: float = 0.15
+@export var dash_cooldown: float = 1.0
 
 # Squash & Stretch
 @export var jump_squash_scale := Vector2(0.85, 1.15)
@@ -76,8 +84,16 @@ var wall_jump_cooldown_timer := 0.0
 var roll_timer: float = 0.0
 var roll_input_locked: bool = false
 var wall_jump_direction_locked: bool = false
+var is_dashing := false
+var dash_timer: float = 0.0
+var dash_cooldown_timer: float = 0.0
+var dash_direction := Vector2.ZERO
+var dash_trail_timer: float = 0.0
+@export var dash_trail_start_interval: float = 0.01  # Start with large interval
+@export var dash_trail_end_interval: float = 0.005  # End with near-zero interval
 
 @export var hitbox_duration: float = 0.1  # Duration in seconds for hitbox to be active
+@export var dash_damage_multiplier: float = 2.0  # Damage multiplier during dash
 
 func is_player() -> bool:
 	return true
@@ -129,6 +145,7 @@ func _ready():
 	# Ensure player only collides with ground, not enemies
 	collision_layer = 2  # Layer 2
 	collision_mask = 1   # Only check layer 1 (ground)
+	add_to_group("player")  # Add to player group for enemy detection
 	default_dust_amount = dust_particles.amount
 	default_landing_right_amount = landing_dust_particles_right.amount
 	default_landing_left_amount = landing_dust_particles_left.amount
@@ -149,7 +166,116 @@ func _ready():
 	# Store original sprite scale for squash & stretch
 	original_sprite_scale = animated_sprite_2d.scale
 	
+	# Set up dash trail
+	_setup_dash_trail()
+	
+	# Set dust particles to render below player
+	_setup_dust_layers()
+	
 	# Player area initialization
+
+func _setup_dust_layers() -> void:
+	# Set dust particles to render below player using z-index
+	dust_particles.z_index = -1
+	landing_dust_particles_left.z_index = -1
+	landing_dust_particles_right.z_index = -1
+	
+	# Alternative: Use rendering layers if needed
+	# dust_particles.render_layer = 1
+	# landing_dust_particles_left.render_layer = 1
+	# landing_dust_particles_right.render_layer = 1
+
+func _setup_dash_trail() -> void:
+	# Create main trail sprite for copying
+	dash_trail_sprite = Sprite2D.new()
+	add_child(dash_trail_sprite)
+	
+	# Set up dash trail sprite
+	dash_trail_sprite.modulate = Color.WHITE
+	dash_trail_sprite.z_index = -1  # Behind main sprite
+	
+	# Load and apply shader
+	var shader_material = ShaderMaterial.new()
+	shader_material.shader = load("res://shaders/dash_trail.gdshader")
+	dash_trail_sprite.material = shader_material
+	
+	# Initially hide the trail
+	dash_trail_sprite.visible = false
+
+func _create_dash_trail() -> void:
+	if not dash_trail_sprite:
+		return
+		
+	# Create a new trail sprite for this instance
+	var trail_instance = Sprite2D.new()
+	get_tree().current_scene.add_child(trail_instance)  # Add to scene root, not player
+	dash_trails.append(trail_instance)
+	
+	# Update trail sprite to match current animation frame
+	if animated_sprite_2d.sprite_frames and animated_sprite_2d.animation != "":
+		var frame = animated_sprite_2d.frame
+		var texture = animated_sprite_2d.sprite_frames.get_frame_texture(animated_sprite_2d.animation, frame)
+		if texture:
+			trail_instance.texture = texture
+	
+	# Copy position, scale, and flip at creation time
+	var creation_position = global_position - (dash_direction * 25.0)  # Offset behind player
+	trail_instance.global_position = creation_position
+	# Apply combined scale from player root and animated sprite for correct size
+	trail_instance.scale = scale * animated_sprite_2d.scale
+	trail_instance.flip_h = animated_sprite_2d.flip_h
+	trail_instance.modulate = Color.WHITE
+	trail_instance.z_index = -1  # Behind main sprite
+	
+	# Apply shader material
+	var shader_material = ShaderMaterial.new()
+	shader_material.shader = load("res://shaders/dash_trail.gdshader")
+	shader_material.set_shader_parameter("fade_alpha", 1.0)  # Start at full opacity
+	trail_instance.material = shader_material
+	
+	# Make trail visible and fade out from full opacity
+	trail_instance.visible = true
+	var tween = create_tween()
+	tween.set_parallel(true)
+	tween.tween_method(func(alpha): shader_material.set_shader_parameter("fade_alpha", alpha), 1.0, 0.0, 0.5)  # Fade out over 0.5 seconds
+	tween.tween_callback(func(): 
+		trail_instance.queue_free()
+		dash_trails.erase(trail_instance)
+	).set_delay(0.5)
+
+func _get_floor_contact_points() -> Array:
+	var contact_points = []
+	# Use get_slide_collision_count to get actual floor contact points
+	if is_on_floor():
+		for i in range(get_slide_collision_count()):
+			var collision = get_slide_collision(i)
+			# Check if collision is with floor (normal pointing up)
+			if collision.get_normal().y < -0.5:  # Floor has upward normal
+				contact_points.append(collision.get_position())
+	
+	# Fallback: estimate contact points at player's feet
+	if contact_points.is_empty():
+		var player_bottom = global_position + Vector2(0, 20)  # Adjust based on sprite size
+		contact_points.append(player_bottom + Vector2(-10, 0))
+		contact_points.append(player_bottom + Vector2(10, 0))
+	
+	return contact_points
+
+func _get_wall_contact_point() -> Vector2:
+	if left_wall_detector and left_wall_detector.is_colliding():
+		return left_wall_detector.get_collision_point()
+	elif right_wall_detector and right_wall_detector.is_colliding():
+		return right_wall_detector.get_collision_point()
+	
+	# Fallback: check slide collisions for wall contact
+	if is_on_wall():
+		for i in range(get_slide_collision_count()):
+			var collision = get_slide_collision(i)
+			# Check if collision is with wall (normal pointing sideways)
+			if abs(collision.get_normal().x) > 0.5:  # Wall has sideways normal
+				return collision.get_position()
+	
+	return Vector2.ZERO
 
 func _play_jump_squash() -> void:
 	if squash_tween:
@@ -224,15 +350,28 @@ func _physics_process(delta: float) -> void:
 		
 		_play_land_squash()
 		
-		# Create dust burst on landing
-		ParticlesUtil.trigger_landing_burst(
-			landing_dust_particles_right,
-			landing_dust_particles_left,
-			abs(velocity.x),
-			attack_speed,
-			default_landing_right_amount,
-			default_landing_left_amount
-		)
+		# Create dust burst on landing at contact points
+		var contact_points = _get_floor_contact_points()
+		if contact_points.size() > 0:
+			# Position landing dust particles at contact points
+			if contact_points.size() >= 1:
+				landing_dust_particles_left.global_position = contact_points[0]
+				landing_dust_particles_left.restart()
+				landing_dust_particles_left.emitting = true
+			if contact_points.size() >= 2:
+				landing_dust_particles_right.global_position = contact_points[1]
+				landing_dust_particles_right.restart()
+				landing_dust_particles_right.emitting = true
+		else:
+			# Fallback to original logic if no contact points detected
+			ParticlesUtil.trigger_landing_burst(
+				landing_dust_particles_right,
+				landing_dust_particles_left,
+				abs(velocity.x),
+				attack_speed,
+				default_landing_right_amount,
+				default_landing_left_amount
+			)
 
 	was_on_floor = on_floor
 	
@@ -242,15 +381,41 @@ func _physics_process(delta: float) -> void:
 	
 	# Update jump dust timer
 	jump_dust_timer = ParticlesUtil.update_jump_dust_timer(jump_dust_timer, delta)
-	ParticlesUtil.update_continuous_dust(
-		dust_particles,
-		is_moving_horizontally,
-		on_floor,
-		jump_dust_timer,
-		abs(velocity.x),
-		speed,
-		default_dust_amount
-	)
+	# Update continuous dust at contact points
+	var should_emit := (is_moving_horizontally and on_floor) or (jump_dust_timer > 0.0)
+	if should_emit:
+		if jump_dust_timer > 0.0:
+			# Use player center for jump dust (collision shape position)
+			dust_particles.position = Vector2(-1.4800978, 5.9203925)
+			dust_particles.emitting = true
+		else:
+			# Use floor contact points for movement dust
+			var contact_points = _get_floor_contact_points()
+			if contact_points.size() > 0:
+				for point in contact_points:
+					dust_particles.global_position = point
+					var target_amount := ParticlesUtil._scaled_amount(abs(velocity.x), speed, default_dust_amount)
+					if not dust_particles.emitting:
+						dust_particles.amount = target_amount
+					else:
+						if target_amount > dust_particles.amount:
+							dust_particles.amount = target_amount
+					dust_particles.emitting = true
+			else:
+				# Fallback to original logic
+				ParticlesUtil.update_continuous_dust(
+					dust_particles,
+					is_moving_horizontally,
+					on_floor,
+					jump_dust_timer,
+					abs(velocity.x),
+					speed,
+					default_dust_amount
+				)
+	else:
+		# Stop dust emission if not moving on floor and not jumping and not wall sliding
+		if dust_particles.emitting and not is_on_wall_custom():
+			dust_particles.emitting = false
 	
 	if Input.is_action_just_pressed("attack") and not is_attacking and not is_rolling:
 		AudioUtils.play_with_random_pitch(slash, 0.9, 1.1)
@@ -265,6 +430,10 @@ func _physics_process(delta: float) -> void:
 		knockback_velocity = attack_knockback
 		hitbox_collision_shape.disabled = false
 		hitbox_timer.start(hitbox_duration)  # Start timer to disable hitbox after specified duration
+	
+	# Dash input handling
+	if Input.is_action_just_pressed("dash") and not is_dashing and dash_cooldown_timer <= 0 and not is_rolling and not is_attacking:
+		_start_dash()
 	
 	# Check if attack animation has finished
 	if is_attacking and animated_sprite_2d.animation.begins_with("attack"):
@@ -366,9 +535,20 @@ func _physics_process(delta: float) -> void:
 		if jump_count > 0:
 			jump_count = 0
 	
-	if is_on_wall_now and velocity.y > 0:  # Only when falling, not jumping up
+	if is_on_wall_now and velocity.y > 0 and not is_on_floor():  # Only when sliding down wall, not when touching floor
 		# Gradually reduce downward velocity to wall slide speed
 		velocity.y = wall_slide_speed
+		
+		# Emit continuous wall sliding dust at contact point
+		var wall_contact = _get_wall_contact_point()
+		if wall_contact != Vector2.ZERO:
+			dust_particles.global_position = wall_contact
+			dust_particles.amount = wall_slide_dust_amount
+			dust_particles.emitting = true
+	else:
+		# Stop wall dust when not actively sliding down wall
+		if dust_particles.emitting and not ((is_moving_horizontally and on_floor) or jump_dust_timer > 0.0):
+			dust_particles.emitting = false
 
 	if Input.is_action_just_pressed("ui_accept") and jump_count < max_jumps and not is_rolling:
 		# Check if player was wall-sliding before jump
@@ -378,8 +558,9 @@ func _physics_process(delta: float) -> void:
 		jump_count += 1
 		is_jumping = true  # Start jumping state
 		AudioUtils.play_with_random_pitch(jump, 0.9, 1.1)
-		# Start dust trail for jump
+		# Start dust trail for jump at player center (using collision shape position)
 		jump_dust_timer = jump_dust_duration
+		dust_particles.position = Vector2(-1.4800978, 5.9203925)
 		dust_particles.emitting = true
 		
 		_play_jump_squash()
@@ -403,8 +584,14 @@ func _physics_process(delta: float) -> void:
 		if velocity.y >= 0:  # Once falling, no longer jumping
 			is_jumping = false
 
-	# Apply knockback if active
-	if knockback_velocity > 0:
+	# Update dash cooldown timer
+	if dash_cooldown_timer > 0:
+		dash_cooldown_timer -= delta
+	
+	# Handle dash movement
+	if is_dashing:
+		_update_dash(delta)
+	elif knockback_velocity > 0:
 		velocity.x = knockback_direction * knockback_velocity
 		knockback_velocity = move_toward(knockback_velocity, 0, speed * delta * 2)
 	else:
@@ -510,3 +697,90 @@ func _on_hurtbox_area_entered(area: Area2D) -> void:
 		
 		# Take damage (using 10 damage as default enemy damage)
 		take_damage(10, enemy_position)
+
+func _start_dash() -> void:
+	# Get dash direction from input or facing direction
+	var input_dir = Vector2(
+		Input.get_axis("ui_left", "ui_right"),
+		Input.get_axis("ui_up", "ui_down")
+	).normalized()
+	
+	if input_dir != Vector2.ZERO:
+		dash_direction = input_dir
+	else:
+		# Default to facing direction if no input
+		dash_direction = Vector2(-1.0, 0.0) if animated_sprite_2d.flip_h else Vector2(1.0, 0.0)
+	
+	# Start dash
+	is_dashing = true
+	dash_timer = dash_duration
+	dash_cooldown_timer = dash_cooldown
+	dash_trail_timer = 0.0  # Reset trail timer
+	
+	# Enable hitbox during dash
+	hitbox_collision_shape.disabled = false
+	hitbox_timer.start(dash_duration)  # Disable hitbox after dash ends
+	
+	# Set dash damage flag
+	set_meta("is_dashing", true)
+	set_meta("dash_damage_multiplier", dash_damage_multiplier)
+	
+	# Set knockback direction for dash attack
+	knockback_direction = 1.0 if dash_direction.x > 0 else -1.0
+	knockback_velocity = attack_knockback * 1.5  # Stronger knockback for dash
+	
+	# Create dash dust effect
+	dust_particles.position = Vector2(-1.4800978, 5.9203925)
+	dust_particles.amount = 15
+	dust_particles.emitting = true
+	
+	# Create initial dash trail
+	_create_dash_trail()
+
+func _get_current_trail_interval() -> float:
+	# Calculate progress through dash (0.0 = start, 1.0 = end)
+	var dash_progress = 1.0 - (dash_timer / dash_duration)
+	
+	# Linear interpolation from start interval to end interval
+	return lerp(dash_trail_start_interval, dash_trail_end_interval, dash_progress)
+
+func _update_dash(delta: float) -> void:
+	dash_timer -= delta
+	dash_trail_timer -= delta
+	
+	if dash_timer <= 0.0:
+		# End dash
+		is_dashing = false
+		velocity = Vector2.ZERO  # Stop momentum after dash
+		# Hitbox is already disabled by timer
+		# Clear dash damage flag
+		set_meta("is_dashing", false)
+		remove_meta("dash_damage_multiplier")
+		return
+	
+	# Create trail effect at variable intervals
+	if dash_trail_timer <= 0.0:
+		_create_dash_trail()
+		dash_trail_timer = _get_current_trail_interval()
+	
+	# Calculate dash speed to cover distance in duration
+	var dash_speed = dash_distance / dash_duration
+	
+	# Apply dash velocity
+	velocity = dash_direction * dash_speed
+	
+	# Override gravity during dash
+	# This makes the dash feel more responsive and predictable
+	
+	# Update sprite facing based on dash direction
+	if dash_direction.x != 0:
+		animated_sprite_2d.flip_h = dash_direction.x < 0
+	
+	# Update hitbox position to follow dash direction
+	if dash_direction.x != 0:
+		hitbox.position.x = original_hitbox_position.x + (dash_direction.x * 30)
+	else:
+		hitbox.position.x = original_hitbox_position.x
+	
+	# You could add dash animation here if you have one
+	# animated_sprite_2d.animation = "dash"

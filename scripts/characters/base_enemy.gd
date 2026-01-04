@@ -356,12 +356,79 @@ func take_damage(amount: int = damage_per_hit, attacker_position: Vector2 = Vect
 	_on_damage_taken(attacker_position)
 	
 	if current_hp <= 0 and was_alive:
-		_die_with_knockback()
+		# Check if killed by dash attack
+		var is_dash_kill = false
+		if attacker_position != Vector2.ZERO:
+			var player_node = get_tree().get_first_node_in_group("player")
+			if player_node and player_node.has_meta("is_dashing") and player_node.get_meta("is_dashing"):
+				is_dash_kill = true
+		
+		if is_dash_kill:
+			_die_with_dash_delay(attacker_position)
+		else:
+			_die_with_knockback()
 
 ## Called when the enemy dies with knockback effect
 func _die_with_knockback() -> void:
+	# Disable hurtbox when dead
+	if hurtbox:
+		hurtbox.set_deferred("monitoring", false)
+		hurtbox.set_deferred("monitorable", false)
+	
 	# Handle character death using CharacterUtils
 	CharacterUtils.handle_character_death(self, animated_sprite, "death", fatal_knockback_force)
+
+## Called when the enemy dies from dash attack with freeze delay
+func _die_with_dash_delay(attacker_position: Vector2) -> void:
+	# Disable hurtbox when dead
+	if hurtbox:
+		hurtbox.set_deferred("monitoring", false)
+		hurtbox.set_deferred("monitorable", false)
+	
+	# Freeze enemy in place immediately - disable physics processing
+	set_physics_process(false)
+	
+	# Freeze in current animation frame
+	if animated_sprite:
+		animated_sprite.pause()  # Pause in current frame
+	
+	# Wait for a moment to show the frozen pose
+	await get_tree().create_timer(0.5).timeout  # 0.5 second freeze in current pose
+	
+	# Apply knockback now that the frozen moment is shown
+	CharacterUtils.apply_knockback(self, attacker_position, fatal_knockback_force * 1.2)  # Stronger knockback for dash kills
+	
+	# Wait a bit more for knockback to play out
+	await get_tree().create_timer(0.3).timeout
+	
+	# Now play death animation at half speed for dash kills
+	if animated_sprite and animated_sprite.sprite_frames and animated_sprite.sprite_frames.has_animation("death"):
+		var original_speed = animated_sprite.speed_scale
+		animated_sprite.speed_scale = 0.5  # Half speed for dash deaths
+		animated_sprite.animation = "death"
+		animated_sprite.play()
+		
+		# Wait for death animation to finish (at half speed)
+		await animated_sprite.animation_finished
+		
+		# Restore original speed scale
+		animated_sprite.speed_scale = original_speed
+		
+		# Now start the fade-out effect
+		var fade_tween = create_tween()
+		fade_tween.tween_property(animated_sprite, "modulate:a", 0.0, 1.0)  # 1 second fade out
+		
+		# Wait for fade to complete before removing
+		await fade_tween.finished
+		
+		# Remove enemy
+		queue_free()
+	else:
+		# Fallback if no death animation - just fade out
+		var fade_tween = create_tween()
+		fade_tween.tween_property(animated_sprite, "modulate:a", 0.0, 1.0)
+		await fade_tween.finished
+		queue_free()
 
 ## Called when the enemy dies
 func _die() -> void:
@@ -407,8 +474,12 @@ func _on_hurtbox_area_entered(area: Area2D) -> void:
 		var attacker = area.get_parent()
 		var attacker_position = attacker.global_position if attacker else Vector2.ZERO
 		
-		# Play hit sound on player when hitting enemy
+		# Check if attacker is dashing and apply damage multiplier
+		var damage_amount = damage_per_hit
+		if attacker and attacker.has_meta("is_dashing") and attacker.get_meta("is_dashing"):
+			damage_amount = int(damage_per_hit * attacker.get_meta("dash_damage_multiplier"))
+		
 		if attacker and attacker.has_method("play_hit_sound"):
 			attacker.play_hit_sound()
 		
-		take_damage(damage_per_hit, attacker_position)
+		take_damage(damage_amount, attacker_position)

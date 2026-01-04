@@ -7,6 +7,8 @@ const DROPLET_COUNT := 35
 const FLOATING_DECAL_COUNT := 15  # Increased count since we're removing droplets
 const DEAD_ENEMY_DROPLET_COUNT := 20  # Reduced blood for dead enemies
 const DEAD_ENEMY_FLOATING_DECAL_COUNT := 10  # Increased for dead enemies
+const DASH_DROPLET_COUNT := 60  # Increased blood for dash attacks
+const DASH_FLOATING_DECAL_COUNT := 25  # Increased decals for dash attacks
 
 # Configurable speed values
 @export var droplet_min_speed: float = 600.0
@@ -20,6 +22,7 @@ const DEAD_ENEMY_FLOATING_DECAL_COUNT := 10  # Increased for dead enemies
 
 var direction: Vector2 = Vector2.RIGHT  # Default direction, can be set from outside
 var is_dead_enemy: bool = false  # Flag to reduce blood amount
+var is_dash_attack: bool = false  # Flag to increase blood amount for dash attacks
 
 @onready var audio_player = $BloodSplash
 
@@ -36,9 +39,17 @@ func set_direction(dir: Vector2) -> void:
 func set_dead_enemy(dead: bool) -> void:
 	is_dead_enemy = dead
 
+func set_dash_attack(dash: bool) -> void:
+	is_dash_attack = dash
+
 func _spawn_blood_droplets() -> void:
 	var droplet_count = DEAD_ENEMY_DROPLET_COUNT if is_dead_enemy else DROPLET_COUNT
 	var floating_decal_count = DEAD_ENEMY_FLOATING_DECAL_COUNT if is_dead_enemy else FLOATING_DECAL_COUNT
+	
+	# Override with dash attack amounts if this is a dash attack
+	if is_dash_attack:
+		droplet_count = DASH_DROPLET_COUNT
+		floating_decal_count = DASH_FLOATING_DECAL_COUNT
 	
 	# Spawn regular falling droplets
 	for i in range(droplet_count):

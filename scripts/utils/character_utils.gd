@@ -57,7 +57,7 @@ static func update_hitbox_position_x(
 		original_position.y
 	)
 
-static func create_blood_splash(character_position: Vector2, attacker_position: Vector2, amount: int = 10) -> void:
+static func create_blood_splash(character_position: Vector2, attacker_position: Vector2, amount: int = 10, is_dash_attack: bool = false) -> void:
 	var direction = (character_position - attacker_position).normalized()
 	
 	# Create blood splash using the new system
@@ -75,6 +75,10 @@ static func create_blood_splash(character_position: Vector2, attacker_position: 
 			# Set position and direction
 			blood_splash.global_position = character_position
 			blood_splash.set_direction(direction)
+			
+			# Increase blood amount for dash attacks
+			if is_dash_attack and blood_splash.has_method("set_dash_attack"):
+				blood_splash.set_dash_attack(true)
 	else:
 		pass
 
@@ -100,7 +104,17 @@ static func handle_damage_effects(
 	# Create blood splash effect
 	if attacker_position != Vector2.ZERO:
 		var blood_amount = 5 if current_hp > 0 else 8  # More blood for fatal hit
-		create_blood_splash(character.global_position, attacker_position, blood_amount)
+		
+		# Check if this is a dash attack
+		var is_dash_attack = false
+		var scene_tree = Engine.get_main_loop() as SceneTree
+		if scene_tree:
+			# Find the player to check dash status
+			var player_node = scene_tree.get_first_node_in_group("player")
+			if player_node and player_node.has_meta("is_dashing"):
+				is_dash_attack = player_node.get_meta("is_dashing")
+		
+		create_blood_splash(character.global_position, attacker_position, blood_amount, is_dash_attack)
 
 static func handle_character_death(
 	character: Node2D,

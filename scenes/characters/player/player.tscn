@@ -459,6 +459,7 @@ collision_layer = 2
 safe_margin = 0.14
 script = ExtResource("1_6avc5")
 attack_knockback = 200.0
+dash_trail_start_interval = 0.05
 
 [node name="landing" type="AudioStreamPlayer2D" parent="."]
 position = Vector2(-1, 1)
@@ -481,7 +482,7 @@ scale = Vector2(0.4661355, 0.4661355)
 sprite_frames = SubResource("SpriteFrames_sulyr")
 animation = &"fall"
 autoplay = "idle"
-frame_progress = 0.43556416
+frame_progress = 0.31477198
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(-1.4800978, 5.9203925)
@@ -516,7 +517,7 @@ explosiveness = 1.0
 process_material = SubResource("ParticleProcessMaterial_landing_dust_left")
 
 [node name="PlayerArea" type="Area2D" parent="."]
-position = Vector2(13.320892, 0)
+position = Vector2(16.281075, 4.7683716e-07)
 collision_layer = 4
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="PlayerArea"]
