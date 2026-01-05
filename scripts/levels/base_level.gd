@@ -20,14 +20,8 @@ func _ready() -> void:
 	# Automatically add UI to the level
 	_add_ui_to_level()
 	
-	# Add dust particles effect
-	_add_dust_particles()
-	
 	# Call level-specific initialization
 	_initialize_level()
-	
-	# Connect to camera movement to keep particles visible
-	_connect_camera_tracking()
 
 func _initialize_level() -> void:
 	# Override in child classes for level-specific initialization
@@ -48,83 +42,6 @@ func _add_ui_to_level() -> void:
 	else:
 		push_warning("UI scene not found at: ", UI_SCENE_PATH)
 
-func _add_dust_particles() -> void:
-	# Set visibility rect to cover the entire viewport
-	var viewport_size = get_viewport().get_visible_rect().size
-	
-	# Create 3 layers of dust particles with different opacity
-	var opacity_levels = [0.4, 0.25, 0.15]
-	var z_indices = [-50, -75, -100]  # Different background layers
-	
-	for i in range(3):
-		# Create GPUParticles2D for dust effect
-		var dust_particles = GPUParticles2D.new()
-		add_child(dust_particles)
-		
-		# Configure particle system
-		dust_particles.name = "DustParticles_" + str(i)
-		dust_particles.position = Vector2.ZERO  # Center of the level
-		dust_particles.emitting = true
-		dust_particles.amount = 30
-		dust_particles.lifetime = 8.0
-		dust_particles.visibility_rect = Rect2(-viewport_size / 2, viewport_size)
-		dust_particles.z_index = z_indices[i]  # Different background layers
-		
-		# Configure particle process material
-		var process_material = ParticleProcessMaterial.new()
-		process_material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-		process_material.emission_box_extents = Vector3(viewport_size.x, viewport_size.y, 100)
-		process_material.direction = Vector3(0, -1, 0)
-		process_material.spread = 30.0
-		process_material.initial_velocity_min = 10.0
-		process_material.initial_velocity_max = 30.0
-		process_material.angular_velocity_min = -45.0
-		process_material.angular_velocity_max = 45.0
-		process_material.gravity = Vector3.ZERO
-		process_material.scale_min = 0.4
-		process_material.scale_max = 0.8
-		process_material.color = Color.WHITE
-		process_material.color.a = opacity_levels[i]  # Set opacity for this layer
-		
-		# Set up texture for particles (use particle sprite)
-		var dust_texture_path = "res://sprites/effects/particle.png"
-		if ResourceLoader.exists(dust_texture_path):
-			var dust_texture = load(dust_texture_path)
-			dust_particles.texture = dust_texture
-		
-		dust_particles.process_material = process_material
-	
-	print("3 layers of dust particles automatically added to level: ", level_name)
-
-func _connect_camera_tracking() -> void:
-	# Find the camera in the scene tree
-	var camera = get_viewport().get_camera_2d()
-	if camera:
-		# Set up continuous camera tracking
-		set_process(true)
-		# Initial positioning
-		_update_particles_position(camera.global_position)
-	else:
-		# Try to find camera after a short delay (in case it's not ready yet)
-		call_deferred("_deferred_camera_connect")
-
-func _deferred_camera_connect() -> void:
-	var camera = get_viewport().get_camera_2d()
-	if camera:
-		set_process(true)
-		_update_particles_position(camera.global_position)
-
-func _process(_delta: float) -> void:
-	var camera = get_viewport().get_camera_2d()
-	if camera:
-		_update_particles_position(camera.global_position)
-
-func _update_particles_position(camera_position: Vector2) -> void:
-	# Update all 3 dust particle layers
-	for i in range(3):
-		var dust_particles = get_node_or_null("DustParticles_" + str(i))
-		if dust_particles:
-			dust_particles.global_position = camera_position
 
 # Helper methods for level management
 func _play_level_start_sound() -> void:

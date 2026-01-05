@@ -26,7 +26,7 @@ var player_area: Area2D
 var dash_trail_sprite: Sprite2D
 
 # Performance optimization: cache frequently used positions and calculations
-var cached_jump_dust_position: Vector2 = Vector2(-1.4800978, 5.9203925)
+var cached_jump_dust_position: Vector2 = Vector2(-1.4800978, 61.9203925)
 var cached_wall_contact_point: Vector2 = Vector2.ZERO
 var wall_contact_update_timer: float = 0.0
 const WALL_CONTACT_UPDATE_INTERVAL: float = 0.05  # Update wall contact 20 times per second
@@ -120,6 +120,10 @@ var dash_cooldown_timer: float = 0.0
 var dash_direction := Vector2.ZERO
 var dash_trail_timer: float = 0.0
 var trail_creation_timer: float = 0.0  # Additional timer for performance optimization
+
+# Bat throwing variables
+var has_bat: bool = true
+var bat_in_air: bool = false
 
 # Particle optimization variables
 var cached_contact_points: Array = []
@@ -432,11 +436,12 @@ func _get_floor_contact_points() -> Array:
 			if collision.get_normal().y < -0.5:  # Floor has upward normal
 				contact_points.append(collision.get_position())
 	
-	# Fallback: estimate contact points at player's feet
+	# Fallback: estimate contact points at player's feet using collision shape
 	if contact_points.is_empty():
-		var player_bottom = global_position + Vector2(0, 20)  # Adjust based on sprite size
-		contact_points.append(player_bottom + Vector2(-10, 0))
-		contact_points.append(player_bottom + Vector2(10, 0))
+		# Use the bottom edge of the collision shape for more accurate positioning
+		var collision_shape_bottom = global_position + Vector2(0, 61.9203925)  # Bottom edge of collision shape
+		contact_points.append(collision_shape_bottom + Vector2(-10, 0))
+		contact_points.append(collision_shape_bottom + Vector2(10, 0))
 	
 	return contact_points
 
@@ -553,19 +558,31 @@ func _physics_process(delta: float) -> void:
 		
 		_play_land_squash()
 		
-		# Create dust burst on landing at cached contact points
-		if cached_contact_points.size() > 0:
-			# Position landing dust particles at contact points
+		# Create dust burst on landing at actual contact points
+		var fresh_contact_points = _get_floor_contact_points()
+		if fresh_contact_points.size() > 0:
+			# Position both landing dust particles at the same contact point (or middle point)
 			var landing_left = _get_landing_dust_particles_left()
 			var landing_right = _get_landing_dust_particles_right()
-			if cached_contact_points.size() >= 1:
-				landing_left.global_position = cached_contact_points[0]
-				landing_left.restart()
-				landing_left.emitting = true
-			if cached_contact_points.size() >= 2:
-				landing_right.global_position = cached_contact_points[1]
-				landing_right.restart()
-				landing_right.emitting = true
+			
+			# Determine the emission position
+			var emission_position: Vector2
+			if fresh_contact_points.size() >= 2:
+				# Use middle point between two contact points
+				emission_position = (fresh_contact_points[0] + fresh_contact_points[1]) / 2.0
+			else:
+				# Use the single contact point
+				emission_position = fresh_contact_points[0]
+			
+			# Position both particles at the same emission point
+			landing_left.global_position = emission_position
+			landing_right.global_position = emission_position
+			
+			# Emit both particles in opposite directions
+			landing_left.restart()
+			landing_left.emitting = true
+			landing_right.restart()
+			landing_right.emitting = true
 		else:
 			# Fallback to original logic if no contact points detected
 			ParticlesUtil.trigger_landing_burst(
@@ -620,7 +637,7 @@ func _physics_process(delta: float) -> void:
 		if dust.emitting and not is_on_wall_custom():
 			dust.emitting = false
 	
-	if Input.is_action_just_pressed("attack") and not is_attacking and not is_rolling:
+	if Input.is_action_just_pressed("attack") and not is_attacking and not is_rolling and not bat_in_air:
 		print("[DEBUG] Attack initiated - is_on_floor: ", is_on_floor(), " is_on_wall: ", is_on_wall(), " current animation: ", animated_sprite_2d.animation)
 		_play_audio_optimized(slash, 0.9, 1.1)
 		if attack_alternate:
@@ -640,6 +657,10 @@ func _physics_process(delta: float) -> void:
 	# Dash input handling
 	if Input.is_action_just_pressed("dash") and not is_dashing and dash_cooldown_timer <= 0 and not is_rolling and not is_attacking:
 		_start_dash()
+	
+	# Bat throwing input handling
+	if Input.is_action_just_pressed("throw_bat") and has_bat and not bat_in_air and not is_rolling and not is_attacking:
+		_throw_bat()
 	
 	# Check if attack animation has finished
 	if is_attacking and animated_sprite_2d.animation.begins_with("attack"):
@@ -712,9 +733,14 @@ func _physics_process(delta: float) -> void:
 	# Handle running animation and sound (only on ground) - use cached direction and audio optimization
 	if not is_attacking and not is_rolling and not is_wall_jumping and not is_dashing:
 		if is_moving_horizontally and on_floor:
-			if animated_sprite_2d.animation != "run":
-				print("[DEBUG] Setting run animation - is_on_floor: ", on_floor, " is_moving_horizontally: ", is_moving_horizontally)
-			animated_sprite_2d.animation = "run"
+			if not bat_in_air:
+				if animated_sprite_2d.animation != "run":
+					print("[DEBUG] Setting run animation - is_on_floor: ", on_floor, " is_moving_horizontally: ", is_moving_horizontally)
+				animated_sprite_2d.animation = "run"
+			else:
+				if animated_sprite_2d.animation != "run_without_bat":
+					print("[DEBUG] Setting run_without_bat animation - is_on_floor: ", on_floor, " is_moving_horizontally: ", is_moving_horizontally)
+					animated_sprite_2d.animation = "run_without_bat"
 			# Optimized walking audio with reduced frequency checks
 			if walk_audio_timer >= WALK_AUDIO_CHECK_INTERVAL:
 				walk_audio_timer = 0.0
@@ -727,9 +753,14 @@ func _physics_process(delta: float) -> void:
 					walk.pitch_scale = cached_walk_pitch
 					walk.play()
 		else:
-			if animated_sprite_2d.animation != "idle":
-				print("[DEBUG] Setting idle animation - is_on_floor: ", on_floor, " is_moving_horizontally: ", is_moving_horizontally, " previous animation: ", animated_sprite_2d.animation)
-			animated_sprite_2d.animation = "idle"
+			if not bat_in_air:
+				if animated_sprite_2d.animation != "idle":
+					print("[DEBUG] Setting idle animation - is_on_floor: ", on_floor, " is_moving_horizontally: ", is_moving_horizontally, " previous animation: ", animated_sprite_2d.animation)
+				animated_sprite_2d.animation = "idle"
+			else:
+				if animated_sprite_2d.animation != "idle_without_bat":
+					print("[DEBUG] Setting idle_without_bat animation - is_on_floor: ", on_floor, " is_moving_horizontally: ", is_moving_horizontally, " previous animation: ", animated_sprite_2d.animation)
+					animated_sprite_2d.animation = "idle_without_bat"
 			# Stop walking audio when not moving (check less frequently)
 			if walk_audio_timer >= WALK_AUDIO_CHECK_INTERVAL and walk.playing:
 				walk.stop()
@@ -775,11 +806,22 @@ func _physics_process(delta: float) -> void:
 		if dust.emitting and not ((is_moving_horizontally and on_floor) or jump_dust_timer > 0.0):
 			dust.emitting = false
 
-	if Input.is_action_just_pressed("ui_accept") and jump_count < max_jumps and not is_rolling:
+	if Input.is_action_just_pressed("ui_accept") and jump_count < max_jumps:
 		# Check if player was wall-sliding before jump
 		var was_wall_sliding = is_on_wall_custom()
 		
-		velocity.y = jump_velocity
+		# If jumping during roll, preserve roll momentum and convert to jump
+		if is_rolling:
+			# Convert roll momentum to jump velocity
+			velocity.x = roll_direction * roll_speed
+			velocity.y = jump_velocity
+			is_rolling = false  # Exit roll state
+			roll_direction = 0
+			roll_timer = 0.0
+			roll_input_locked = false
+		else:
+			velocity.y = jump_velocity
+		
 		jump_count += 1
 		is_jumping = true  # Start jumping state
 		_play_audio_optimized(jump, 0.9, 1.1)
@@ -1028,3 +1070,45 @@ func _update_dash(delta: float) -> void:
 	
 	# You could add dash animation here if you have one
 	# animated_sprite_2d.animation = "dash"
+
+func _throw_bat() -> void:
+	"""Throw the bat in the facing direction"""
+	if not has_bat or bat_in_air:
+		return
+	
+	# Create bat instance
+	var bat_scene = preload("res://scenes/objects/thrown_bat.tscn")
+	var bat = bat_scene.instantiate()
+	
+	# Set bat properties
+	bat.thrower = self
+	bat.global_position = global_position
+	
+	# Set direction based on facing direction
+	bat.direction = Vector2.RIGHT
+	if animated_sprite_2d.flip_h:
+		bat.direction = Vector2.LEFT
+	
+	# Add bat to scene
+	get_tree().current_scene.add_child(bat)
+	
+	# Update player state
+	has_bat = false
+	bat_in_air = true
+	
+	print("[DEBUG] Bat thrown - direction: ", bat.direction)
+
+func _on_bat_returned() -> void:
+	"""Called when the bat returns to the player"""
+	has_bat = true
+	bat_in_air = false
+	
+	print("[DEBUG] Bat returned to player")
+	
+	# Update animation immediately if needed
+	if is_on_floor():
+		var is_moving = Input.get_axis("ui_left", "ui_right") != 0
+		if is_moving:
+			animated_sprite_2d.animation = "run"
+		else:
+			animated_sprite_2d.animation = "idle"

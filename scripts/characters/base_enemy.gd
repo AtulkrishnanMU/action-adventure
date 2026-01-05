@@ -70,6 +70,11 @@ const RAYCAST_UPDATE_DISTANCE: float = 50.0  # Only update raycasts when player 
 func _ready() -> void:
 	current_hp = max_hp  # Set current_hp after max_hp is set in child's _ready()
 	
+	# Add to groups for collision detection
+	add_to_group("enemies")
+	if hurtbox:
+		hurtbox.add_to_group("hurtboxes")
+	
 	# Randomize movement speed within the specified range
 	move_speed = randf_range(min_move_speed, max_move_speed)
 	

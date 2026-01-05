@@ -135,7 +135,6 @@ static func camera_shake_simple(camera: Camera2D, intensity: float, duration: fl
 	duration = DEFAULT_SHAKE_DURATION
 	
 	# Reduce intensity and duration by 40%
-	intensity *= 0.6
 	duration *= 0.7
 	
 	# Get or create tween
