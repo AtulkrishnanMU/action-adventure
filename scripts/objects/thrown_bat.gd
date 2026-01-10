@@ -10,18 +10,19 @@ const BAT_TRAVEL_DISTANCE = 600.0
 const SPIN_SPEED = 20.0  # Rotations per second
 
 @onready var sprite: Sprite2D = $Sprite2D
+@onready var spin_sound_player: AudioStreamPlayer2D = $Spin
 
 var direction: Vector2 = Vector2.RIGHT
 var start_position: Vector2
 var thrower: Node2D
 var rotation_angle: float = 0.0
-var damage: int = 25
-var spin_sound_player: AudioStreamPlayer2D = null
+var damage: int = 10
 
 # State variables
 var is_returning: bool = false
 var return_timeout: float = 3.0  # 3 seconds timeout for return
 var total_flight_time: float = 0.0
+var spin_audio_timer: float = 0.0
 
 # Speed variation variables
 var current_speed: float = BAT_SPEED
@@ -41,9 +42,24 @@ func _ready() -> void:
 	# Set up collision
 	collision_mask = 1  # World/collider layer
 	collision_mask |= 16  # Enemy layer (layer 5)
+	collision_mask |= 4   # Crate hurtbox layer (layer 3)
+	
+	# Start spin audio with random pitch (no loop property in Godot 4)
+	if spin_sound_player:
+		spin_sound_player.pitch_scale = randf_range(0.8, 1.2)
+		spin_sound_player.play()
 
 func _physics_process(delta: float) -> void:
 	total_flight_time += delta
+	
+	# Handle spin audio looping
+	if spin_sound_player:
+		spin_audio_timer += delta
+		# Restart audio every 0.1 seconds to create looping effect
+		if spin_audio_timer >= 0.1:
+			spin_audio_timer = 0.0
+			if not spin_sound_player.playing:
+				spin_sound_player.play()
 	
 	# Update spin speed
 	if total_flight_time < 0.2:
@@ -95,11 +111,16 @@ func _pickup_bat():
 	if thrower and is_instance_valid(thrower):
 		if thrower.has_method("_on_bat_returned"):
 			thrower._on_bat_returned()
+	
+	# Stop spin audio when bat is picked up
+	if spin_sound_player and spin_sound_player.playing:
+		spin_sound_player.stop()
+	
 	queue_free()
 
 func _on_body_entered(body: Node) -> void:
 	# Only handle direct body collisions (not hurtbox areas)
-	print("[DEBUG] Bat _on_body_entered: ", body.name, " groups: ", body.get_groups())
+	print("[DEBUG] Bat _on_body_entered: ", body.name, " type: ", body.get_class(), " groups: ", body.get_groups())
 	if body == thrower:
 		return
 	
@@ -108,14 +129,62 @@ func _on_body_entered(body: Node) -> void:
 		print("[DEBUG] Bat hit enemy body: ", body.name)
 		body.take_damage(damage, global_position)  # Pass bat position as attacker_position
 		CharacterUtils.apply_knockback(body, global_position, 300.0, 0.2)
+	
+	# Check if this is a crate (StaticBody2D with crate script or named Crate)
+	elif body is StaticBody2D:
+		print("[DEBUG] Bat hit StaticBody2D: ", body.name)
+		# Try multiple ways to detect crate
+		var is_crate = false
+		if body.get_script():
+			print("[DEBUG] Body script path: ", body.get_script().get_path() if body.get_script() else "none")
+			if body.get_script().get_path().contains("crate"):
+				is_crate = true
+		if "Crate" in body.name:
+			is_crate = true
+		if body.has_method("take_damage"):
+			is_crate = true
+			
+		if is_crate:
+			print("[DEBUG] Bat confirmed crate hit: ", body.name)
+			if body.has_method("_instant_break"):
+				body._instant_break()
+			elif body.has_method("take_damage"):
+				body.take_damage()
+			else:
+				print("[DEBUG] Crate has no take_damage method")
 
 func _on_area_entered(area: Area2D) -> void:
-	# Only process hurtbox areas from enemies
+	# Only process hurtbox areas from enemies and crates
 	print("[DEBUG] Bat _on_area_entered: ", area.name, " groups: ", area.get_groups())
 	var owner = area.get_parent()
 	if owner and owner != thrower:
+		print("[DEBUG] Area owner: ", owner.name if owner else "none")
+		
 		# Check if this area is a hurtbox and owner is an enemy
 		if area.is_in_group("hurtboxes") and owner.is_in_group("enemies") and owner.has_method("take_damage"):
 			print("[DEBUG] Bat hit enemy hurtbox: ", owner.name)
 			owner.take_damage(damage, global_position)  # Pass bat position as attacker_position
 			CharacterUtils.apply_knockback(owner, global_position, 300.0, 0.2)
+		
+		# Check if this is a crate hurtbox
+		elif area.name == "Hurtbox" and owner:
+			print("[DEBUG] Bat found Hurtbox area, checking owner: ", owner.name)
+			print("[DEBUG] Owner has take_damage: ", owner.has_method("take_damage"))
+			if owner.get_script():
+				print("[DEBUG] Owner script path: ", owner.get_script().get_path())
+			
+			# Try multiple ways to detect this is a crate
+			var is_crate = false
+			if owner.get_script() and owner.get_script().get_path().contains("crate"):
+				is_crate = true
+			if "Crate" in owner.name:
+				is_crate = true
+			if owner.has_method("take_damage"):
+				is_crate = true
+				
+			if is_crate:
+				print("[DEBUG] Bat confirmed crate hurtbox hit: ", owner.name)
+				if owner.has_method("_instant_break"):
+					owner._instant_break()
+				elif owner.has_method("take_damage"):
+					owner.take_damage()

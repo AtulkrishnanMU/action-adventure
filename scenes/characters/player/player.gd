@@ -655,7 +655,7 @@ func _physics_process(delta: float) -> void:
 		timer.start(hitbox_duration)  # Start timer to disable hitbox after specified duration
 	
 	# Dash input handling
-	if Input.is_action_just_pressed("dash") and not is_dashing and dash_cooldown_timer <= 0 and not is_rolling and not is_attacking:
+	if Input.is_action_just_pressed("dash") and not is_dashing and dash_cooldown_timer <= 0 and not is_rolling and not is_attacking and not bat_in_air:
 		_start_dash()
 	
 	# Bat throwing input handling
@@ -679,7 +679,8 @@ func _physics_process(delta: float) -> void:
 		roll_timer = 0.0
 		roll_input_locked = true
 
-		animated_sprite_2d.animation = "roll"
+		var target_roll_animation = "roll_without_bat" if bat_in_air else "roll"
+		animated_sprite_2d.animation = target_roll_animation
 		animated_sprite_2d.flip_h = roll_direction < 0
 	
 	# Stop roll ONLY if player hits a wall
@@ -768,18 +769,20 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		if not is_attacking and not is_rolling and not is_wall_jumping and not is_dashing:
 			if is_on_wall_now and velocity.y > 0:  # Only when falling, not jumping up
-				if animated_sprite_2d.animation != "wall_slide":
-					print("[DEBUG] Setting wall_slide animation - is_attacking: ", is_attacking, " velocity.y: ", velocity.y)
-				animated_sprite_2d.animation = "wall_slide"
+				var target_wall_slide_animation = "wall_slide_without_bat" if bat_in_air else "wall_slide"
+				if animated_sprite_2d.animation != target_wall_slide_animation:
+					print("[DEBUG] Setting ", target_wall_slide_animation, " animation - is_attacking: ", is_attacking, " velocity.y: ", velocity.y)
+				animated_sprite_2d.animation = target_wall_slide_animation
 				# Face away from wall when sliding
 				if left_wall_detector.is_colliding():
 					animated_sprite_2d.flip_h = false  # Face right when wall is on left
 				elif right_wall_detector.is_colliding():
 					animated_sprite_2d.flip_h = true   # Face left when wall is on right
 			else:
-				if animated_sprite_2d.animation != "jump":
-					print("[DEBUG] Setting jump animation - is_attacking: ", is_attacking, " velocity.y: ", velocity.y, " is_on_wall: ", is_on_wall())
-				animated_sprite_2d.animation = "jump"
+				var target_jump_animation = "jump_without_bat" if bat_in_air else "jump"
+				if animated_sprite_2d.animation != target_jump_animation and not animated_sprite_2d.animation.begins_with("attack"):
+					print("[DEBUG] Setting ", target_jump_animation, " animation - is_attacking: ", is_attacking, " velocity.y: ", velocity.y, " is_on_wall: ", is_on_wall())
+				animated_sprite_2d.animation = target_jump_animation
 	velocity = CharacterUtils.apply_gravity(velocity, get_gravity(), delta, fall_gravity_multiplier)
 
 	# Apply wall sliding using cached wall detection
@@ -841,7 +844,8 @@ func _physics_process(delta: float) -> void:
 				is_wall_jumping = true
 				wall_jump_cooldown_timer = wall_jump_cooldown_duration
 				wall_jump_direction_locked = true  # Lock direction input after wall jump
-				animated_sprite_2d.animation = "roll"
+				var target_roll_animation = "roll_without_bat" if bat_in_air else "roll"
+				animated_sprite_2d.animation = target_roll_animation
 				animated_sprite_2d.flip_h = wall_jump_dir < 0  # Face away from wall
 				animated_sprite_2d.play()
 	

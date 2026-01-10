@@ -2,7 +2,7 @@ shader_type canvas_item;
 
 uniform float opacity : hint_range(0.0, 1.0) = 1.0;
 uniform float fade_alpha : hint_range(0.0, 1.0) = 1.0;
-uniform vec4 trail_color : source_color = vec4(0.6, 0.2, 0.8, 1.0);
+uniform vec4 trail_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);  // White color
 uniform float blur_amount : hint_range(0.0, 10.0) = 10.0;
 
 void fragment() {

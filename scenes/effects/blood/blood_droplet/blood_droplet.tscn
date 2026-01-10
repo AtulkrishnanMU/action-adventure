@@ -6,7 +6,7 @@
 radius = 2.0
 
 [node name="BloodDroplet" type="Area2D"]
-z_index = -2
+z_index = 0
 collision_layer = 0
 script = ExtResource("1")
 

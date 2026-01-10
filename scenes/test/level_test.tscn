@@ -1,115 +1,80 @@
-[gd_scene load_steps=7 format=3 uid="uid://i8xpmfqdpdc"]
+[gd_scene load_steps=10 format=3 uid="uid://i8xpmfqdpdc"]
 
 [ext_resource type="PackedScene" uid="uid://b5xhiwa1iy42" path="res://scenes/characters/player/player.tscn" id="1_10enl"]
+[ext_resource type="PackedScene" uid="uid://b0vtmuk4a1j7l" path="res://scenes/backgrounds/background_1.tscn" id="2_ju1jq"]
 [ext_resource type="PackedScene" uid="uid://bvqx8y7n2kqrp" path="res://scenes/objects/grass/grass.tscn" id="4_kq4re"]
-[ext_resource type="PackedScene" uid="uid://bvxk8y7n2kqrp" path="res://scenes/objects/crate/crate.tscn" id="4_sogyd"]
 [ext_resource type="PackedScene" uid="uid://s5s8rihc17h3" path="res://scenes/characters/small_enemy/small_enemy.tscn" id="5_sogyd"]
 [ext_resource type="Script" uid="uid://mi4uftwirg3w" path="res://scripts/levels/level_test.gd" id="6_level_script"]
-
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_kq4re"]
-size = Vector2(930.5, 138)
+[ext_resource type="PackedScene" uid="uid://bvn3x8k2m4n5p" path="res://scenes/foregrounds/foreground_1.tscn" id="7_aspfb"]
+[ext_resource type="Script" uid="uid://cmvdwm71q4t3y" path="res://scripts/camera/horizontal_follow_camera.gd" id="8_9vx4r"]
+[ext_resource type="PackedScene" uid="uid://bnvjlvwfut6ib" path="res://scenes/backgrounds/ground.tscn" id="9_ds60b"]
+[ext_resource type="PackedScene" uid="uid://bvxk8y7n2kqrp" path="res://scenes/objects/crate/crate.tscn" id="9_jo28k"]
 
 [node name="LevelTest" type="Node2D"]
 script = ExtResource("6_level_script")
 
+[node name="background1" parent="." instance=ExtResource("2_ju1jq")]
+
 [node name="Player" parent="." instance=ExtResource("1_10enl")]
 position = Vector2(437.99997, 292)
 collision_layer = 3
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(438, 166)
+position_smoothing_enabled = true
+position_smoothing_speed = 30.0
+script = ExtResource("8_9vx4r")
+target_path = NodePath("../Player")
 
 [node name="SmallEnemy" parent="." instance=ExtResource("5_sogyd")]
 position = Vector2(893, 296)
 collision_layer = 4
 
 [node name="Grass" parent="." instance=ExtResource("4_kq4re")]
-position = Vector2(532, 309)
+position = Vector2(533, 381)
 
 [node name="Grass4" parent="." instance=ExtResource("4_kq4re")]
-position = Vector2(584, 309)
+position = Vector2(585, 381)
 
 [node name="Grass5" parent="." instance=ExtResource("4_kq4re")]
-position = Vector2(604, 308)
+position = Vector2(605, 380)
 
 [node name="Grass6" parent="." instance=ExtResource("4_kq4re")]
-position = Vector2(623, 308)
+position = Vector2(624, 380)
 
 [node name="Grass7" parent="." instance=ExtResource("4_kq4re")]
-position = Vector2(644, 309)
+position = Vector2(645, 381)
 
 [node name="Grass2" parent="." instance=ExtResource("4_kq4re")]
-position = Vector2(550, 309)
+position = Vector2(551, 381)
 
 [node name="Grass3" parent="." instance=ExtResource("4_kq4re")]
-position = Vector2(565, 309)
+position = Vector2(566, 381)
 
 [node name="Grass8" parent="." instance=ExtResource("4_kq4re")]
-position = Vector2(664, 308)
+position = Vector2(665, 380)
 
 [node name="Grass9" parent="." instance=ExtResource("4_kq4re")]
-position = Vector2(716, 308)
+position = Vector2(717, 380)
 
 [node name="Grass10" parent="." instance=ExtResource("4_kq4re")]
-position = Vector2(736, 307)
+position = Vector2(737, 379)
 
 [node name="Grass11" parent="." instance=ExtResource("4_kq4re")]
-position = Vector2(755, 307)
+position = Vector2(756, 379)
 
 [node name="Grass12" parent="." instance=ExtResource("4_kq4re")]
-position = Vector2(776, 308)
+position = Vector2(777, 380)
 
 [node name="Grass13" parent="." instance=ExtResource("4_kq4re")]
-position = Vector2(682, 308)
+position = Vector2(683, 380)
 
 [node name="Grass14" parent="." instance=ExtResource("4_kq4re")]
-position = Vector2(697, 308)
+position = Vector2(698, 380)
 
-[node name="Crate" parent="." instance=ExtResource("4_sogyd")]
-position = Vector2(281, -474)
+[node name="Crate" parent="." instance=ExtResource("9_jo28k")]
+position = Vector2(994, 383)
 scale = Vector2(1, 0.9634685)
-
-[node name="StaticBody2D" type="StaticBody2D" parent="."]
-position = Vector2(-843, 0)
-scale = Vector2(2.9925776, 1.0182104)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="StaticBody2D"]
-position = Vector2(796.75, 404)
-shape = SubResource("RectangleShape2D_kq4re")
-
-[node name="ColorRect" type="ColorRect" parent="StaticBody2D"]
-offset_left = 332.0
-offset_top = 335.0
-offset_right = 1267.0
-offset_bottom = 489.0
-color = Color(0.27134386, 0.008001301, 1.2032688e-08, 1)
-
-[node name="StaticBody2D2" type="StaticBody2D" parent="."]
-position = Vector2(695.00006, -775.0001)
-rotation = 1.5715367
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="StaticBody2D2"]
-position = Vector2(796.75, 404)
-shape = SubResource("RectangleShape2D_kq4re")
-
-[node name="ColorRect" type="ColorRect" parent="StaticBody2D2"]
-offset_left = 332.0
-offset_top = 336.09918
-offset_right = 1267.0
-offset_bottom = 489.0
-color = Color(0.27134386, 0.008001301, 1.2032688e-08, 1)
-
-[node name="StaticBody2D3" type="StaticBody2D" parent="."]
-position = Vector2(1002.9999, -1024.9999)
-rotation = 1.5715367
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="StaticBody2D3"]
-position = Vector2(796.75, 404)
-shape = SubResource("RectangleShape2D_kq4re")
-
-[node name="ColorRect" type="ColorRect" parent="StaticBody2D3"]
-offset_left = 332.0
-offset_top = 335.0
-offset_right = 1267.0
-offset_bottom = 472.49268
-color = Color(0.27134386, 0.008001301, 1.2032688e-08, 1)
 
 [node name="SmallEnemy2" parent="." instance=ExtResource("5_sogyd")]
 position = Vector2(2190, 283)
@@ -119,3 +84,20 @@ position = Vector2(1601, 280)
 
 [node name="SmallEnemy4" parent="." instance=ExtResource("5_sogyd")]
 position = Vector2(2578, 282)
+
+[node name="foreground1" parent="." instance=ExtResource("7_aspfb")]
+
+[node name="ground" parent="." instance=ExtResource("9_ds60b")]
+position = Vector2(-288, 21)
+
+[node name="ground2" parent="." instance=ExtResource("9_ds60b")]
+position = Vector2(307, 21)
+
+[node name="ground3" parent="." instance=ExtResource("9_ds60b")]
+position = Vector2(902, 21)
+
+[node name="ground4" parent="." instance=ExtResource("9_ds60b")]
+position = Vector2(1496, 21)
+
+[node name="ground5" parent="." instance=ExtResource("9_ds60b")]
+position = Vector2(2093, 21)

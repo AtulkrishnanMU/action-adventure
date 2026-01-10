@@ -1,0 +1,33 @@
+[gd_scene load_steps=4 format=3 uid="uid://bvn3x8k2m4n5p"]
+
+[ext_resource type="Texture2D" uid="uid://caxtt6x7hb74u" path="res://sprites/effects/sky/1.png" id="1_lhnec"]
+[ext_resource type="Script" uid="uid://ckos0e7qkr4nd" path="res://scripts/effects/infinite_parallax_layer.gd" id="2_crw7j"]
+[ext_resource type="Texture2D" uid="uid://1vui858yypk5" path="res://sprites/effects/sky/4.png" id="2_ev8vr"]
+
+[node name="foreground1" type="ParallaxBackground"]
+layer = 100
+
+[node name="ParallaxLayer" type="ParallaxLayer" parent="."]
+visible = false
+texture_filter = 1
+position = Vector2(-5, -3)
+scale = Vector2(2.0124435, 2.0124435)
+motion_scale = Vector2(0.2, 0)
+
+[node name="Sprite2D" type="Sprite2D" parent="ParallaxLayer"]
+texture_filter = 1
+texture = ExtResource("1_lhnec")
+centered = false
+
+[node name="ParallaxLayer2" type="ParallaxLayer" parent="."]
+visible = false
+texture_filter = 1
+position = Vector2(-5, -3)
+scale = Vector2(2.0124435, 2.0124435)
+motion_scale = Vector2(0.5, 0)
+script = ExtResource("2_crw7j")
+
+[node name="Sprite2D" type="Sprite2D" parent="ParallaxLayer2"]
+texture_filter = 1
+texture = ExtResource("2_ev8vr")
+centered = false

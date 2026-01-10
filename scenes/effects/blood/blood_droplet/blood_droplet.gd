@@ -83,7 +83,7 @@ func _setup_particle_appearance() -> void:
 			sprite.centered = true
 			
 			# Random scale and rotation for variety
-			var scale_factor = randf_range(0.2, 0.5)  # Increased from 0.1-0.3
+			var scale_factor = randf_range(0.15, 0.35)  # Reduced size
 			sprite.scale = Vector2(scale_factor, scale_factor)
 			sprite.rotation = randf() * PI * 2
 			
@@ -91,8 +91,15 @@ func _setup_particle_appearance() -> void:
 			sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
 func _should_collide_with(body: Node) -> bool:
-	# Blood collides with more surfaces including characters
-	return body is TileMap or body.is_in_group("walls") or body.is_in_group("ground") or body.is_in_group("colliders") or body.is_in_group("enemies") or body.is_in_group("player")
+	# Regular blood droplets collide with characters, tilemaps, and ground
+	return (body is TileMap or 
+		   body.is_in_group("walls") or 
+		   body.is_in_group("ground") or 
+		   body.is_in_group("colliders") or 
+		   body.is_in_group("enemies") or 
+		   body.is_in_group("player") or
+		   body.is_in_group("ground") or
+		   body is StaticBody2D)  # Also collide with any StaticBody2D (like the ground scene)
 
 func _on_collision(body: Node) -> void:
 	# Create blood decal on collision

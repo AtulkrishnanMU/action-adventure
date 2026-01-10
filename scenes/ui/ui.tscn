@@ -1,6 +1,14 @@
-[gd_scene load_steps=4 format=3 uid="uid://d2tr3qoeyvfpu"]
+[gd_scene load_steps=6 format=3 uid="uid://d2tr3qoeyvfpu"]
 
-[ext_resource type="Script" uid="uid://b61ykrumxe6wd" path="res://scenes/ui/ui.gd" id="UIScript"]
+[ext_resource type="Script" path="res://scenes/ui/ui.gd" id="1_b61yk"]
+[ext_resource type="Shader" path="res://scenes/ui/vignette.gdshader" id="2_vignette"]
+
+[sub_resource type="ShaderMaterial" id="Material_vignette"]
+shader = ExtResource("2_vignette")
+shader_parameter/outer_radius = 0.8
+shader_parameter/inner_radius = 0.09
+shader_parameter/vignette_strength = 0.5
+shader_parameter/dither_strength = 0.02
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1"]
 bg_color = Color(0.2, 0.2, 0.2, 1)
@@ -27,10 +35,22 @@ corner_radius_bottom_right = 4
 corner_radius_bottom_left = 4
 
 [node name="UI" type="CanvasLayer"]
-script = ExtResource("UIScript")
+script = ExtResource("1_b61yk")
+
+[node name="Vignette" type="ColorRect" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -10.0
+offset_top = -10.0
+offset_right = 10.0
+offset_bottom = 10.0
+material = SubResource("Material_vignette")
 
 [node name="HealthBar" type="ProgressBar" parent="."]
-layout_mode = 0
 offset_left = 50.0
 offset_top = 20.0
 offset_right = 1120.0

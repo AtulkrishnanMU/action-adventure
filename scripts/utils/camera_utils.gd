@@ -1,7 +1,7 @@
 extends RefCounted
 
 # Camera shake constants
-const DEFAULT_SHAKE_INTENSITY: float = 10.0
+const DEFAULT_SHAKE_INTENSITY: float = 5.0  # Reduced from 10.0
 const DEFAULT_SHAKE_DURATION: float = 0.5
 
 # Pre-calculated shake patterns for performance
@@ -50,7 +50,7 @@ static func camera_shake(camera: Camera2D, intensity: float, duration: float) ->
 	intensity = DEFAULT_SHAKE_INTENSITY
 	duration = DEFAULT_SHAKE_DURATION
 	
-	var original_position := camera.position
+	var original_offset := camera.offset
 	
 	# Select appropriate shake pattern based on intensity
 	var pattern: Array[Vector2]
@@ -77,11 +77,11 @@ static func camera_shake(camera: Camera2D, intensity: float, duration: float) ->
 		var fade_factor := 1.0 - (float(i) / float(shake_count) * 0.7)  # Simple fade out
 		var final_offset := shake_offset * fade_factor
 		
-		# Add shake step
-		tween.tween_property(camera, "position", original_position + final_offset, step_duration)
+		# Add shake step using offset instead of position
+		tween.tween_property(camera, "offset", final_offset, step_duration).from_current()
 	
-	# Return to original position
-	tween.tween_property(camera, "position", original_position, 0.1)
+	# Return to original offset
+	tween.tween_property(camera, "offset", original_offset, 0.1)
 
 # Optimized version with pattern selection
 static func camera_shake_pattern(camera: Camera2D, pattern: ShakePattern, intensity: float, duration: float) -> void:
@@ -91,8 +91,6 @@ static func camera_shake_pattern(camera: Camera2D, pattern: ShakePattern, intens
 	# Always use the constants
 	intensity = DEFAULT_SHAKE_INTENSITY
 	duration = DEFAULT_SHAKE_DURATION
-	
-	var original_position := camera.position
 	
 	# Get the pre-calculated pattern
 	var pattern_array: Array[Vector2]
@@ -114,16 +112,16 @@ static func camera_shake_pattern(camera: Camera2D, pattern: ShakePattern, intens
 	var tween := camera.create_tween()
 	tween.set_parallel(false)
 	
-	# Apply pattern with intensity scaling
+	# Apply pattern with intensity scaling using offset
 	for i in range(shake_count):
 		var shake_offset := pattern_array[i] * intensity
 		var fade_factor := 1.0 - (float(i) / float(shake_count) * 0.7)
 		var final_offset := shake_offset * fade_factor
 		
-		tween.tween_property(camera, "position", original_position + final_offset, step_duration)
+		tween.tween_property(camera, "offset", final_offset, step_duration).from_current()
 	
-	# Return to original position
-	tween.tween_property(camera, "position", original_position, 0.1)
+	# Return to original offset
+	tween.tween_property(camera, "offset", Vector2.ZERO, 0.1)
 
 # Simplified one-shot shake for performance
 static func camera_shake_simple(camera: Camera2D, intensity: float, duration: float) -> void:
@@ -144,21 +142,18 @@ static func camera_shake_simple(camera: Camera2D, intensity: float, duration: fl
 	# Stop any existing shake
 	tween.stop()
 	
-	# Store original position
-	var original_position = camera.position
-	
 	# Generate random offset (reduced vertical shake)
 	var offset = Vector2(
 		randf_range(-1, 1) * intensity * 0.7,  # Reduced horizontal shake
 		randf_range(-1, 1) * intensity * 0.3    # Even less vertical shake
 	)
 	
-	# Apply gentler shake
-	tween.tween_property(camera, "position", original_position + offset, duration * 0.2)\
+	# Apply gentler shake using offset
+	tween.tween_property(camera, "offset", offset, duration * 0.2)\
 		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 	
-	# Smoother return to original position
-	tween.tween_property(camera, "position", original_position, duration * 0.8)\
+	# Smoother return to original offset
+	tween.tween_property(camera, "offset", Vector2.ZERO, duration * 0.8)\
 		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 
 # Helper function to get the best shake pattern for intensity
@@ -190,7 +185,7 @@ static func camera_shake_micro(camera: Camera2D, intensity: float) -> void:
 		randf_range(-1, 1) * intensity * 0.02   # Reduced from 0.05
 	)
 	
-	var original_pos = camera.position
-	tween.tween_property(camera, "position", original_pos + offset, 0.03)  # Faster
-	tween.tween_property(camera, "position", original_pos, 0.07)  # Faster return
+	# Apply shake using offset
+	tween.tween_property(camera, "offset", offset, 0.03)  # Faster
+	tween.tween_property(camera, "offset", Vector2.ZERO, 0.07)  # Faster return
 	tween.tween_callback(tween.queue_free)

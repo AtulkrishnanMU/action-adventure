@@ -18,7 +18,7 @@ func _ready() -> void:
 			sprite.centered = true
 			
 			# Random scale and rotation for variety
-			var scale_factor = randf_range(0.4, 1.0)  # Increased from 0.2-0.6
+			var scale_factor = randf_range(0.2, 0.5)  # Reduced size
 			sprite.scale = Vector2(scale_factor, scale_factor)
 			sprite.rotation = randf() * PI
 			
